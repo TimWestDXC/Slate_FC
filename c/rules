@@ -1,0 +1,26 @@
+/*
+    rules.c
+
+    T. D. West 2 November 1999
+
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "rules.h"
+
+rlist_type *apart_list;
+rlist_type *together_list;
+
+void initialise_rule_list(rlist_type *list) {
+    list = NULL;
+}
+
+void add_players_to_rule_list(rlist_type *list, int a, int b) {
+    rlist_type *new_entry_ptr;
+    new_entry_ptr               = (rlist_type *)malloc(sizeof(rlist_type *));
+    new_entry_ptr->player_no[0] = a;
+    new_entry_ptr->player_no[1] = b;
+    new_entry_ptr->next         = (void *)list;
+    list                        = new_entry_ptr;
+}

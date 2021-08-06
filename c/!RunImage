@@ -1,0 +1,1111 @@
+/*
+    Slate FC program
+    by Tim West,
+    12th September to 30th October 1996 Initial development
+    27th November 1996                  Added week to date on startup
+    16th January to 13th February 1997  Added tool window and converted to new scoring system
+    12th June 1997                      Clicking APPLY now updates goalie data in picked window
+                                        and added Goalies button to put players in goalie order
+                                        when teams have been entered manually
+    17th September 1997                 Added save text option
+*/
+
+/* #includes */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "add.h"
+#include "apply.h"
+#include "AULib.h"
+#include "constant.h"
+#include "create.h"
+#include "data_io.h"
+#include "gapply.h"
+#include "gpick.h"
+#include "pick.h"
+#include "types.h"
+
+/* #defines */
+
+#define LF                 10
+#define CR                 13
+#define QUOTE_CHAR         34
+
+#define ERRBOXFLAGS        (WERRFLAG_OK_BOX + WERRFLAG_CANCEL_BOX + WERRFLAG_NO_ERROR_FROM)
+
+#define POLL_MASK          1
+
+#define PLAYER_WINDOW      0
+#define PICKED_WINDOW      1
+#define PROG_INFO_WINDOW   2
+#define TOOL_WINDOW        3
+#define MAX_WINDOWS        4
+
+#define MAX_MENUS          1
+#define VERSION_NUMBER     310 /* Risc OS version no. * 100 */
+
+#define MANUAL_MODE        0
+#define COMPUTED_MODE      1
+
+/* These #defines relate to the icon numbers in the template file */
+
+#define NON_PLAYER         -1
+
+/*
+    SQUAD window
+*/
+#define FIRST_PLAYER_ICON  0
+#define LAST_PLAYER_ICON   23
+#define NO_PLAYER_ICONS    24
+#define DAY_DISPLAY_ICON   24
+#define MONTH_DISPLAY_ICON 25
+#define YEAR_DISPLAY_ICON  26
+#define DAY_UP_BUTTON      27
+#define DAY_DOWN_BUTTON    28
+#define MONTH_UP_BUTTON    29
+#define MONTH_DOWN_BUTTON  30
+#define YEAR_UP_BUTTON     31
+#define YEAR_DOWN_BUTTON   32
+/*
+    PICKED window
+*/
+#define FIRST_PICKED_ICON       0
+#define LAST_PICKED_ICON        (FIRST_PICKED_ICON + NO_PLAYERS - 1)
+#define PREV_SELN_BUTTON        10
+#define NEXT_SELN_BUTTON        11
+#define PICK_BUTTON             12
+#define CLEAR_BUTTON            13
+#define APPLY_BUTTON            14
+#define SELECTION_NO_ICON       20
+#define FIRST_GOALIE_ICON       22
+#define LAST_GOALIE_ICON        (FIRST_GOALIE_ICON + NO_PLAYERS - 1)
+#define GOALIE_ICON(playericon) (playericon + FIRST_GOALIE_ICON - FIRST_PICKED_ICON)
+#define LEFT_SCORE_ICON         32
+#define RIGHT_SCORE_ICON        33
+#define TOTAL_SCORE_ICON        34
+#define GOALIE_CALC_BUTTON      35
+#define SAVE_TEXT_BUTTON        36 /* Added 16-9-97 */
+
+/*
+    TOOL window
+    Icons 0 to 8 are sprites, boxes and text
+*/
+#define NEW_PLAYER_ICON        9
+#define ADD_NEW_BUTTON         10
+#define PLAYER_1_ICON          11
+#define PLAYED_ICON            12
+#define DEC_PLAYED_BUTTON      13
+#define INC_PLAYED_BUTTON      14
+#define PREV_PLAYER_1_BUTTON   15
+#define NEXT_PLAYER_1_BUTTON   16
+#define PLAYER_2_ICON          17
+#define SCORE_ICON             18
+#define DEC_SCORE_BUTTON       19
+#define INC_SCORE_BUTTON       20
+#define PREV_PLAYER_2_BUTTON   21
+#define NEXT_PLAYER_2_BUTTON   22
+#define DEL_PLAYER_ICON        23
+#define DEL_PLAYER_BUTTON      24
+#define PREV_DEL_PLAYER_BUTTON 25
+#define NEXT_DEL_PLAYER_BUTTON 26
+/* 27 to 30 are text */
+#define PLAYED_STOPS_RBUTTON   31
+#define SCORE_FOLLOWS_RBUTTON  32
+#define SCORE_STOPS_RBUTTON    33
+#define PLAYED_FOLLOWS_RBUTTON 34
+
+/* These next #defines set up the menu selection choices */
+
+/* iconbar menu */
+
+#define INFO_OPTION          0
+#define SQUAD_WINDOW_OPTION  1
+#define PICKED_WINDOW_OPTION 2
+#define TOOL_WINDOW_OPTION   3
+#define QUIT_OPTION          4
+
+/* Global variables */
+
+const char *player_filename    = "<Slate_FC$Dir>.data.players";
+const char *date_filename      = "<Slate_FC$Dir>.data.date";
+const char *data_filename      = "<Slate_FC$Dir>.data.data";
+const char *databak_filename   = "<Slate_FC$Dir>.data.databak";
+const char *goalies_filename   = "<Slate_FC$Dir>.data.goalies";
+const char *goalbak_filename   = "<Slate_FC$Dir>.data.goalbak";
+const char *played_filename    = "<Slate_FC$Dir>.data.played";
+const char *playedbak_filename = "<Slate_FC$Dir>.data.playedbak";
+const char *savetext_filename  = "<Slate_FC$Dir>.data.savetext";
+const char *template_filename  = "<Slate_FC$Dir>.Templates";
+const char *date_error_string  = "Date less than expected - OK to apply data - Cancel to abort";
+
+const char *appname = "Slate FC team picker";
+const char *sprname = "!slate_fc";
+
+/*
+    This is the text for the PICK/EDIT button
+*/
+char *pick_edit[] = {
+    "PICK",
+    "EDIT"
+};
+
+char *month[12] = {
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+};
+
+int             days_in_month[12] = {30, 27, 30, 29, 30, 29, 30, 30, 29, 30, 29, 30};
+
+int             current_day;   /* 0..30 */
+int             current_month; /* 0..11 */
+int             current_year;
+
+int             current_selection;
+
+/*
+    MANUAL_MODE   has prev/next disabled, pick button shows PICK (players can be changed)
+    COMPUTED_MODE has prev/next  enabled, pick button shows EDIT (players cannot be changed)
+*/
+int             current_mode;       /* MANUAL_MODE or COMPUTED_MODE */
+
+int             quit_flag;
+int             reload_data;
+int             current_menu;
+window_data     win_data[MAX_WINDOWS];
+menu_data       men_data[MAX_MENUS];
+long int        msglist[] = {0};
+
+player_rec_type player[NO_PLAYER_ICONS];
+
+selection_type *selnptr;
+
+selection_type manual;
+selection_type computed[NO_SELECTIONS];
+
+int            no_players_picked;   /* should always reflect no players in picked window */
+
+/* Function prototyping */
+
+void swap(int *a, int *b);
+void add_week_to_date(void);
+int  main(int argc, char *argv[]);
+void mouse_click(unsigned char poll_block[]);
+void handle_select_on_player_window_icon(int icon_num);
+void handle_adjust_on_player_window_icon(int icon_num);
+void handle_click_on_picked_window_icon(int icon_num, int button);
+void handle_click_on_tool_window_icon(int icon_num, int button);
+void menu_selection(unsigned char poll_block[]);
+void open_main_window(void);
+void wimp_msg(int result, unsigned char poll_block[]);
+void openwindow(unsigned char poll_block[]);
+void closewindow(unsigned char poll_block[]);
+void loadtemplates(void);
+void load_player_names(void);
+void clear_teams(void);
+int  find_free_icon(void);
+void update_date_icons(void);
+void update_selection_icon(void);
+void set_manual_mode(void);
+void set_computed_mode(void);
+void update_team_icons(void);
+void load_date(int *day, int *month, int *year);
+void save_date(int *day, int *month, int *year);
+void save_text(void);
+
+/* Main program */
+
+void swap(int *a, int *b) {
+    int t;
+    t = *a;
+   *a = *b;
+   *b = t;
+}
+
+int main(int argc, char *argv[]) {
+
+    int           task_handle;
+    int           icon_handle;
+    unsigned char poll_block[256];
+    int           poll_result;
+    int           i;
+
+    quit_flag    = FALSE;
+    reload_data  = TRUE;
+    current_menu = 0;
+    no_players_picked = 0;
+
+    task_handle = au_initialise(VERSION_NUMBER, appname, msglist);
+    icon_handle = au_create_iconbar_icon(
+        IBAR_PRIOR_APP,
+        IBAR_ONRIGHT,
+        ICON_ISSPRITE | ICON_HCENTRE | ICON_VCENTRE | ICON_CLICKNOTIFIESONCE,
+        sprname
+    );
+    loadtemplates();
+    load_date(&current_day, &current_month, &current_year);
+    add_week_to_date();
+    update_date_icons();
+    while (!quit_flag) {
+        /*
+            check reload_data flag
+        */
+        if (reload_data) {
+            clear_teams();
+            load_player_names();
+            import_datafile();
+            import_goaliefile();
+            set_manual_mode();
+            reload_data = FALSE;
+        }
+        /* do some polling */
+        poll_result = au_wimp_poll(POLL_MASK, poll_block);
+        switch (poll_result) {
+            case wimp_EOPEN:
+                openwindow(poll_block);
+                break;
+            case wimp_ECLOSE:
+                closewindow(poll_block);
+                break;
+            case wimp_EBUT:
+                mouse_click(poll_block);
+                break;
+            case wimp_EMENU:
+                menu_selection(poll_block);
+                break;
+            case wimp_ESEND        :
+            case wimp_ESENDWANTACK :
+            case wimp_EACK:
+                wimp_msg(poll_result, poll_block);
+                break;
+        }
+    }
+    au_closedown(task_handle);
+
+    for (i = 0; i < MAX_WINDOWS; i++) {
+        free(win_data[i].win_name);
+        free(win_data[i].buffer);
+        free(win_data[i].workspace);
+    }
+
+    for (i = 0; i < MAX_MENUS; i++) {
+        au_destructmenu(&men_data[i]);
+    }
+
+    return 0;
+}
+
+void mouse_click(unsigned char poll_block[]) {
+
+    int clk;
+    int winhandle;
+    int icon_num;
+
+    /*
+        Determine which button was pressed
+    */
+    clk       = (int)au_bytetoword(poll_block, 8);
+    winhandle = (int)au_bytetoword(poll_block, 12);
+    icon_num  = (int)au_bytetoword(poll_block, 16);
+
+    if (winhandle == -2) {
+        switch (clk) {
+            case wimp_BLEFT:
+            case wimp_BRIGHT:
+                open_main_window();
+                break;
+            case wimp_BMID:
+                /*
+                    Time to produce a menu
+                */
+                au_buildmenu("Slate FC", &men_data[0]);
+                au_addtomenu("Info",                      0, win_data[PROG_INFO_WINDOW].win_handle, 0, &men_data[0]);
+                au_addtomenu("Squad",                     0,                                    -1, 0, &men_data[0]);
+                au_addtomenu("Picked",                    0,                                    -1, 0, &men_data[0]);
+                au_addtomenu("Tools",                     0,                                    -1, 0, &men_data[0]);
+                au_addtomenu("Quit",          MENU_LASTITEM,                                    -1, 0, &men_data[0]);
+                au_createmenu(&men_data[0]);
+                current_menu = 1; /* keep track of the last menu we opened */
+                au_openmenu(&men_data[0], (int)au_bytetoword(poll_block, 0) - 64, (44*2)+96);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /*
+        Check to see if it was in the player window
+    */
+    if (winhandle == win_data[PLAYER_WINDOW].win_handle) {
+        switch (clk) {
+            case wimp_BLEFT:
+                handle_select_on_player_window_icon(icon_num);
+                break;
+            case wimp_BMID:
+                break;
+            case wimp_BRIGHT:
+                handle_adjust_on_player_window_icon(icon_num);
+                break;
+            default:
+                break;
+        }
+    }
+    /*
+        Check to see if it was in the picked window
+    */
+    if (winhandle == win_data[PICKED_WINDOW].win_handle) {
+        handle_click_on_picked_window_icon(icon_num, clk);
+    }
+    /*
+        Check to see if it was in the tool window
+    */
+    if (winhandle == win_data[TOOL_WINDOW].win_handle) {
+        handle_click_on_tool_window_icon(icon_num, clk);
+    }
+}
+
+void update_goalie_data_icon(int icon_no, int picked_icon) {
+    /*
+        This pointer is used to access goalie data when clicking players to the picked window
+        The data itself is accessed via goalie_data_type *data_io:goalie_data
+        This variable is pointed to goalie_data[] as required
+    */
+    goalie_data_type *gdataptr;
+    char grawbuf[32];
+    char *rawptr;
+    char *gbptr;
+    int i, len;
+    /*
+        copy the name to the picked window and
+        grey out the icon in the player window
+    */
+    gdataptr = goalie_data + icon_no;
+    len = gdataptr->length;
+    rawptr = gdataptr->raw;
+    gbptr = grawbuf;
+   *gbptr = '\0';
+    if (len > 0) {
+        gbptr += sprintf(gbptr, "%d", *rawptr++);
+        for (i = 1; i < len; i++) {
+            gbptr += sprintf(gbptr, ",%d", *rawptr++);
+        }
+    }
+    au_icon_text_change(grawbuf, win_data[PICKED_WINDOW].win_handle, GOALIE_ICON(picked_icon));  /* put goalie data in icon */
+}
+
+void put_player_in_picked_window(int icon_num, int free_icon) {
+    update_goalie_data_icon(icon_num, free_icon);
+    selnptr->team[free_icon - FIRST_PICKED_ICON] = icon_num;                                   /* icon to return player to */
+    au_icon_text_change(player[icon_num].name, win_data[PICKED_WINDOW].win_handle, free_icon); /* put name in icon */
+    player[icon_num].picked = TRUE;
+    au_disable_icon(win_data[PLAYER_WINDOW].win_handle, icon_num);
+    no_players_picked++;
+}
+
+void add_week_to_date(void) {
+    current_day += 7;
+    if (current_day  >  days_in_month[current_month]) {
+        current_day -= (days_in_month[current_month] + 1);
+        if (current_month == 11) {
+            current_month = 0;
+            current_year++;
+        }
+        else {
+            current_month++;
+        }
+    }
+    update_date_icons();
+}
+
+void inc_day(void) {
+    if (current_day == days_in_month[current_month]) {
+        current_day = 0;
+        if (current_month == 11) {
+            current_month = 0;
+            current_year++;
+        }
+        else {
+            current_month++;
+        }
+    }
+    else {
+        current_day++;
+    }
+    update_date_icons();
+}
+
+void dec_day(void) {
+    if (current_day == 0) {
+        if (current_month == 0) {
+            current_month = 11;
+            current_year--;
+        }
+        else {
+            current_month--;
+        }
+        current_day = days_in_month[current_month];
+    }
+    else {
+        current_day--;
+    }
+    update_date_icons();
+}
+
+void inc_month(void) {
+    if (current_month == 11) {
+        current_month = 0;
+        current_year++;
+    }
+    else {
+        current_month++;
+    }
+    update_date_icons();
+}
+
+void dec_month(void) {
+    if (current_month == 0) {
+        current_month = 11;
+        current_year--;
+    }
+    else {
+        current_month--;
+    }
+    update_date_icons();
+}
+
+void inc_year(void) {
+    current_year++;
+    update_date_icons();
+}
+
+void dec_year(void) {
+    current_year--;
+    update_date_icons();
+}
+
+void handle_select_on_player_window_icon(int icon_num) {
+
+    int free_icon;
+
+    if ((icon_num >= FIRST_PLAYER_ICON) && (icon_num <= LAST_PLAYER_ICON)) {
+        if (!player[icon_num].picked) {
+            free_icon = find_free_icon();
+            if (free_icon != NON_PLAYER) {
+                put_player_in_picked_window(icon_num, free_icon);
+            }
+        }
+    }
+    else {
+        switch (icon_num) {
+            case DAY_UP_BUTTON:
+                inc_day();
+                break;
+            case DAY_DOWN_BUTTON:
+                dec_day();
+                break;
+            case MONTH_UP_BUTTON:
+                inc_month();
+                break;
+            case MONTH_DOWN_BUTTON:
+                dec_month();
+                break;
+            case YEAR_UP_BUTTON:
+                inc_year();
+                break;
+            case YEAR_DOWN_BUTTON:
+                dec_year();
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void handle_adjust_on_player_window_icon(int icon_num) {
+
+    int free_icon;
+
+    if ((icon_num >= FIRST_PLAYER_ICON) && (icon_num <= LAST_PLAYER_ICON)) {
+        if (!player[icon_num].picked) {
+            free_icon = find_free_icon();
+            if (free_icon != NON_PLAYER) {
+                put_player_in_picked_window(icon_num, free_icon);
+            }
+        }
+    }
+    else {
+        switch (icon_num) {
+            case DAY_UP_BUTTON:
+                dec_day();
+                break;
+            case DAY_DOWN_BUTTON:
+                inc_day();
+                break;
+            case MONTH_UP_BUTTON:
+                dec_month();
+                break;
+            case MONTH_DOWN_BUTTON:
+                inc_month();
+                break;
+            case YEAR_UP_BUTTON:
+                dec_year();
+                break;
+            case YEAR_DOWN_BUTTON:
+                inc_year();
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void prev_selection(void) {
+    if (current_selection == 0) {
+        current_selection = NO_SELECTIONS;
+    }
+    current_selection--;
+    selnptr = &computed[current_selection];
+    update_team_icons();
+    update_selection_icon();
+}
+
+void next_selection(void) {
+    current_selection++;
+    if (current_selection == NO_SELECTIONS) {
+        current_selection = 0;
+    }
+    selnptr = &computed[current_selection];
+    update_team_icons();
+    update_selection_icon();
+}
+
+void clicked_on_picked(int icon_num) {
+    if (current_mode == MANUAL_MODE) {
+        int picked_no;
+        picked_no = icon_num - FIRST_PICKED_ICON; /* 0..9 */
+        if (selnptr->team[picked_no] != NON_PLAYER) {
+            /*
+                clear picked icon
+                ungrey player icon
+            */
+            int return_icon;
+            return_icon = selnptr->team[picked_no];
+            selnptr->team[picked_no] = NON_PLAYER;
+            au_icon_text_change("", win_data[PICKED_WINDOW].win_handle, icon_num);
+            au_icon_text_change("", win_data[PICKED_WINDOW].win_handle, GOALIE_ICON(icon_num));
+            player[return_icon].picked = FALSE;
+            au_enable_icon(win_data[PLAYER_WINDOW].win_handle, return_icon);
+            no_players_picked--;
+        }
+    }
+}
+
+void clicked_pick_or_edit_button(void) {
+    if (current_mode == MANUAL_MODE) {
+        /*
+            Only allow PICK when all slots are full
+        */
+        if (no_players_picked == NO_PLAYERS) {
+            pick_teams(&manual, computed);
+            set_computed_mode();
+            au_disable_icon(win_data[PICKED_WINDOW].win_handle, CLEAR_BUTTON);
+        }
+    }
+    else {
+        set_manual_mode();
+        au_enable_icon(win_data[PICKED_WINDOW].win_handle, CLEAR_BUTTON);
+    }
+}
+
+void clicked_clear_button(int button) {
+
+    int i;
+
+    for (i = FIRST_PICKED_ICON; i <= LAST_PICKED_ICON; i++) {
+        handle_click_on_picked_window_icon(i, button);
+    }
+}
+
+void clicked_apply_button(void) {
+
+    int saved_day;
+    int saved_month;
+    int saved_year;
+    int saved_date;
+    int current_date;
+    int do_apply;
+
+    load_date(&saved_day, &saved_month, &saved_year);
+    saved_date    = (saved_year   - 1900) * 10000 +   saved_month * 100 +   saved_day;
+    current_date  = (current_year - 1900) * 10000 + current_month * 100 + current_day;
+    if (current_date <= saved_date) {
+        do_apply = au_report_error(1, date_error_string, ERRBOXFLAGS, appname);
+        if (do_apply == 1) {
+            /* OK was pressed */
+            do_apply = TRUE;
+        }
+        else {
+            /* cancel was pressed */
+            do_apply = FALSE;
+        }
+    }
+    else {
+    }
+    if (do_apply) {
+        int i;
+        apply(selnptr);
+        save_date(&current_day, &current_month, &current_year);
+        add_week_to_date();
+        for (i = 0; i < NO_PLAYERS; i++) {
+            update_goalie_data_icon(selnptr->team[i], i + FIRST_PICKED_ICON);
+        }
+    }
+}
+
+void handle_click_on_picked_window_icon(int icon_num, int button) {
+
+    switch (button) {
+        case wimp_BLEFT:
+        case wimp_BRIGHT:
+            if ((icon_num >= FIRST_PICKED_ICON) && (icon_num <= LAST_PICKED_ICON)) {
+                clicked_on_picked(icon_num);
+            }
+            else {
+                switch (icon_num) {
+                    case PICK_BUTTON:
+                        clicked_pick_or_edit_button();
+                        break;
+                    case CLEAR_BUTTON:
+                        clicked_clear_button(button);
+                        break;
+                    case APPLY_BUTTON:
+                        clicked_apply_button();
+                        break;
+                    case PREV_SELN_BUTTON:
+                        if (button == wimp_BLEFT) {
+                            prev_selection();
+                        }
+                        else {
+                            next_selection();
+                        }
+                        break;
+                    case NEXT_SELN_BUTTON:
+                        if (button == wimp_BLEFT) {
+                            next_selection();
+                        }
+                        else {
+                            prev_selection();
+                        }
+                        break;
+                    case GOALIE_CALC_BUTTON:
+                        if ((current_mode == MANUAL_MODE) /* computer does COMPUTED_MODE */
+                        && (no_players_picked == NO_PLAYERS)) {
+                            selnptr = &manual;
+                            goalie_pick(selnptr);
+                            update_team_icons();
+                        }
+                        break;
+                    case SAVE_TEXT_BUTTON:
+                        save_text();
+                        break;
+                    default:
+                        break;
+                }
+            }
+        default:
+            break;
+    }
+}
+
+void add_new_player_to_database(void) {
+
+    if (no_players >= NO_PLAYER_ICONS) {
+        au_report_error(1, "No room in squad for any more players!", WERRFLAG_OK_BOX, appname);
+    }
+    else {
+        char newname[PLAYER_NAME_SIZE];
+        au_icon_get_text(newname, win_data[TOOL_WINDOW].win_handle, NEW_PLAYER_ICON);
+    }
+}
+
+void handle_click_on_tool_window_icon(int icon_num, int button) {
+
+    switch (button) {
+        case wimp_BLEFT:
+        case wimp_BRIGHT:
+            switch (icon_num) {
+                case ADD_NEW_BUTTON:
+                    /*
+                        Add new player to database
+                    */
+                    add_new_player_to_database();
+                    break;
+                case DEC_PLAYED_BUTTON:
+                    /*
+                        Decrement games played for player 1
+                    */
+                    break;
+                case INC_PLAYED_BUTTON:
+                    /*
+                        Increment games played for player 1
+                    */
+                    break;
+                case PREV_PLAYER_1_BUTTON:
+                    /*
+                        Select player 1
+                    */
+                    break;
+                case NEXT_PLAYER_1_BUTTON:
+                    /*
+                        Select player 1
+                    */
+                    break;
+                case DEC_SCORE_BUTTON:
+                    /*
+                        Decrement score for player 2 wrt player 1
+                    */
+                    break;
+                case INC_SCORE_BUTTON:
+                    /*
+                        Increment score for player 2 wrt player 1
+                    */
+                    break;
+                case PREV_PLAYER_2_BUTTON:
+                    /*
+                        Select player 2
+                    */
+                    break;
+                case NEXT_PLAYER_2_BUTTON:
+                    /*
+                        Select player 2
+                    */
+                    break;
+                case DEL_PLAYER_BUTTON:
+                    /*
+                        Delete existing player from database
+                    */
+                    break;
+                case PREV_DEL_PLAYER_BUTTON:
+                    /*
+                        Select player to be deleted from database
+                    */
+                    break;
+                case NEXT_DEL_PLAYER_BUTTON:
+                    /*
+                        Select player to be deleted from database
+                    */
+                    break;
+                default:
+                    break;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void open_a_window(int window_id) {
+
+    _kernel_swi_regs in, out;
+    unsigned char    temp_buffer[2048];
+
+    au_wordtobyte(win_data[window_id].win_handle, temp_buffer, 0);
+    in.r[1] = (int)temp_buffer;
+    _kernel_swi(Wimp_GetWindowInfo, &in, &out);
+    _kernel_swi(Wimp_OpenWindow, &in, &out);
+}
+
+void open_main_window(void) {
+    /*
+        Open the windows
+    */
+    open_a_window(PLAYER_WINDOW);
+    open_a_window(PICKED_WINDOW);
+}
+
+void menu_selection(unsigned char poll_block[]) {
+
+    long int first_hit;
+    /* Which menu was hit? */
+    if (current_menu == 1) {
+        /* The icon bar menu got it - decipher first menu subselection */
+        first_hit = au_bytetoword(poll_block, 0);
+        switch (first_hit) {
+            case QUIT_OPTION:
+                quit_flag = TRUE;
+                break;
+            case SQUAD_WINDOW_OPTION:
+                open_a_window(PLAYER_WINDOW);
+                break;
+            case PICKED_WINDOW_OPTION:
+                open_a_window(PICKED_WINDOW);
+                break;
+            case TOOL_WINDOW_OPTION:
+                open_a_window(TOOL_WINDOW);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void wimp_msg(int result, unsigned char pollblock[]) {
+
+    unsigned long int message_action;
+
+    /*
+        The next line takes bytes 16 to 19 of the polling block and forms them
+        into a word holding the message action number
+    */
+    message_action = au_bytetoword(pollblock, 16);
+
+    switch (message_action) {
+        case wimp_MCLOSEDOWN:
+            quit_flag = TRUE; /* Message_Quit - time to go */
+            break;
+    }
+}
+
+
+void openwindow(unsigned char pollblock[]) {
+
+    _kernel_swi_regs in, out;
+
+    in.r[1] = (int)pollblock;
+    _kernel_swi(Wimp_OpenWindow, &in, &out);
+}
+
+void closewindow(unsigned char pollblock[]) {
+
+    _kernel_swi_regs in, out;
+
+    in.r[1] = (int)pollblock;
+    _kernel_swi(Wimp_CloseWindow, &in, &out);
+}
+
+void loadtemplates(void) {
+
+    au_opentemplate(template_filename);
+    if (au_loadtemplate("ProgInfo", &win_data[PROG_INFO_WINDOW], 0) == 0) {
+        au_report_error(1, "ProgInfo Template not found!", WERRFLAG_OK_BOX, appname);
+        quit_flag = TRUE;
+    }
+    if (au_loadtemplate("AllPlayers", &win_data[PLAYER_WINDOW], 0) == 0) {
+        au_report_error(1, "AllPlayers Template not found!", WERRFLAG_OK_BOX, appname);
+        quit_flag = TRUE;
+    }
+    if (au_loadtemplate("Picked", &win_data[PICKED_WINDOW], 0) == 0) {
+        au_report_error(1, "Picked Template not found!", WERRFLAG_OK_BOX, appname);
+        quit_flag = TRUE;
+    }
+    if (au_loadtemplate("Tools", &win_data[TOOL_WINDOW], 0) == 0) {
+        au_report_error(1, "Tools Template not found!", WERRFLAG_OK_BOX, appname);
+        quit_flag = TRUE;
+    }
+    au_closetemplate();
+}
+
+void load_player_names(void) {
+
+#define TEMP_BLOCK_SIZE 128
+
+    FILE *fnames;
+    int   icon_h;
+    int   alldone;
+    char  name[TEMP_BLOCK_SIZE];
+
+    for (icon_h = FIRST_PLAYER_ICON; icon_h <= LAST_PLAYER_ICON; icon_h++) {
+        player[icon_h].picked = TRUE;
+    }
+    fnames  = fopen(player_filename, "r");
+    alldone = FALSE;
+    icon_h  = FIRST_PLAYER_ICON;
+    while ((!alldone) && (icon_h <= LAST_PLAYER_ICON)) {
+        if (fgets(name, TEMP_BLOCK_SIZE, fnames) != NULL) {
+            if (strlen(name) >= PLAYER_NAME_SIZE) {
+                name[PLAYER_NAME_SIZE-1] = '\0';
+            }
+            strcpy(player[icon_h].name, name);
+            au_icon_text_change(name, win_data[PLAYER_WINDOW].win_handle, icon_h);
+            player[icon_h].picked = FALSE;
+        }
+        else {
+            alldone = TRUE;
+        }
+        icon_h++;
+    }
+    fclose(fnames);
+    au_icon_text_change(player[FIRST_PLAYER_ICON].name,   win_data[TOOL_WINDOW].win_handle, PLAYER_1_ICON);
+    au_icon_text_change(player[FIRST_PLAYER_ICON].name,   win_data[TOOL_WINDOW].win_handle, DEL_PLAYER_ICON);
+    au_icon_text_change(player[FIRST_PLAYER_ICON+1].name, win_data[TOOL_WINDOW].win_handle, PLAYER_2_ICON);
+}
+
+void clear_teams(void) {
+
+    int i, j;
+    selection_type *selptr;
+
+    for (j = 0; j < NO_PLAYERS; j++) {
+        manual.team[j] = NON_PLAYER;
+    }
+    selptr = computed;
+    for (i = 0; i < NO_SELECTIONS; i++) {
+        for (j = 0; j < NO_PLAYERS; j++) {
+            selptr->team[j] = NON_PLAYER;
+        }
+        selptr++;
+    }
+}
+
+int find_free_icon(void) {
+
+    int freeicon;
+    int found;
+
+    found = FALSE;
+    freeicon = 0;
+    while ((!found) && (freeicon < NO_PLAYERS)) {
+        if (manual.team[freeicon] == NON_PLAYER) {
+            found = TRUE;
+        }
+        else {
+            freeicon++;
+        }
+    }
+    if (!found) {
+        freeicon = NON_PLAYER;
+    }
+    else {
+        freeicon += FIRST_PICKED_ICON;
+    }
+    return freeicon;
+}
+
+void update_date_icons(void) {
+
+    au_icon_number_change(current_day + 1,    win_data[PLAYER_WINDOW].win_handle, DAY_DISPLAY_ICON);
+    au_icon_text_change(month[current_month], win_data[PLAYER_WINDOW].win_handle, MONTH_DISPLAY_ICON);
+    au_icon_number_change(current_year,       win_data[PLAYER_WINDOW].win_handle, YEAR_DISPLAY_ICON);
+}
+
+void update_selection_icon(void) {
+    if (current_mode == MANUAL_MODE) {
+        au_icon_text_change("-", win_data[PICKED_WINDOW].win_handle, SELECTION_NO_ICON);
+        au_icon_text_change("-", win_data[PICKED_WINDOW].win_handle,  LEFT_SCORE_ICON);
+        au_icon_text_change("-", win_data[PICKED_WINDOW].win_handle, RIGHT_SCORE_ICON);
+        au_icon_text_change("-", win_data[PICKED_WINDOW].win_handle, TOTAL_SCORE_ICON);
+    }
+    else {
+        int s = selnptr->score[0] * selnptr->score[1];
+        au_icon_number_change(current_selection + 1, win_data[PICKED_WINDOW].win_handle, SELECTION_NO_ICON);
+        au_icon_number_change(selnptr->score[0],     win_data[PICKED_WINDOW].win_handle,  LEFT_SCORE_ICON);
+        au_icon_number_change(selnptr->score[1],     win_data[PICKED_WINDOW].win_handle, RIGHT_SCORE_ICON);
+        au_icon_number_change(s,                     win_data[PICKED_WINDOW].win_handle, TOTAL_SCORE_ICON);
+    }
+}
+
+void set_manual_mode(void) {
+    au_disable_icon(win_data[PICKED_WINDOW].win_handle, PREV_SELN_BUTTON);
+    au_disable_icon(win_data[PICKED_WINDOW].win_handle, NEXT_SELN_BUTTON);
+    current_mode = MANUAL_MODE;
+    selnptr = &manual;
+    au_icon_text_change(pick_edit[current_mode], win_data[PICKED_WINDOW].win_handle, PICK_BUTTON);
+    update_selection_icon();
+    update_team_icons();
+}
+
+void set_computed_mode(void) {
+    au_enable_icon(win_data[PICKED_WINDOW].win_handle, PREV_SELN_BUTTON);
+    au_enable_icon(win_data[PICKED_WINDOW].win_handle, NEXT_SELN_BUTTON);
+    current_mode = COMPUTED_MODE;
+    current_selection = 0;
+    selnptr = computed;
+    au_icon_text_change(pick_edit[current_mode], win_data[PICKED_WINDOW].win_handle, PICK_BUTTON);
+    update_selection_icon();
+    update_team_icons();
+}
+
+void update_team_icons(void) {
+    int i;
+    int picon;
+    for (i = FIRST_PICKED_ICON; i <= LAST_PICKED_ICON; i++) {
+        picon = selnptr->team[i - FIRST_PICKED_ICON];
+        if ((picon >= FIRST_PLAYER_ICON) && (picon <= LAST_PLAYER_ICON)) {
+            au_icon_text_change(player[picon].name, win_data[PICKED_WINDOW].win_handle, i);
+            update_goalie_data_icon(picon, i);
+        }
+    }
+}
+
+void load_date(int *day, int *month, int *year) {
+    FILE *datefile;
+    datefile = fopen(date_filename, "rb");
+    fread(day,   sizeof(int), 1, datefile);
+    fread(month, sizeof(int), 1, datefile);
+    fread(year,  sizeof(int), 1, datefile);
+    fclose(datefile);
+}
+
+void save_date(int *day, int *month, int *year) {
+    FILE *datefile;
+    datefile = fopen(date_filename, "wb");
+    fwrite(day,   sizeof(int), 1, datefile);
+    fwrite(month, sizeof(int), 1, datefile);
+    fwrite(year,  sizeof(int), 1, datefile);
+    fclose(datefile);
+}
+
+void save_text(void) {
+    FILE *savefile;
+    int i;
+    unsigned long int picon, gicon, winhandle;
+    char *icontextptr;
+    char  pname[PLAYER_NAME_SIZE];
+    savefile = fopen(savetext_filename, "w");
+    picon = FIRST_PICKED_ICON;
+    gicon = FIRST_GOALIE_ICON;
+    winhandle = win_data[PICKED_WINDOW].win_handle;
+    for (i = 0; i < 5; i++) {
+        /*
+            write colour goalie data to file
+        */
+        icontextptr = au_get_ptr_to_icontext(winhandle, gicon);
+        fprintf(savefile, "%c%s%c,", QUOTE_CHAR, icontextptr, QUOTE_CHAR);
+        /*
+            write colour player data to file
+        */
+        icontextptr = au_get_ptr_to_icontext(winhandle, picon);
+        strncpy(pname, icontextptr, PLAYER_NAME_SIZE);
+        if ((icontextptr = strchr(pname, LF)) != NULL) {
+            *icontextptr = '\0';
+        }
+        fprintf(savefile, "%c%s%c,%d,", QUOTE_CHAR, pname, QUOTE_CHAR, i+1);
+        /*
+            write white player data to file
+        */
+        icontextptr = au_get_ptr_to_icontext(winhandle, picon+PLAYERS_PER_SIDE);
+        strncpy(pname, icontextptr, PLAYER_NAME_SIZE);
+        if ((icontextptr = strchr(pname, LF)) != NULL) {
+            *icontextptr = '\0';
+        }
+        fprintf(savefile, "%c%s%c,", QUOTE_CHAR, pname, QUOTE_CHAR);
+        /*
+            write white goalie data to file
+        */
+        icontextptr = au_get_ptr_to_icontext(winhandle, gicon+PLAYERS_PER_SIDE);
+        fprintf(savefile, "%c%s%c%c%c", QUOTE_CHAR, icontextptr, QUOTE_CHAR, CR, LF);
+        picon++;
+        gicon++;
+    }
+    fclose(savefile);
+}

@@ -1,0 +1,3 @@
+Set Slate_FC$Dir <Obey$Dir>
+Iconsprites <Obey$Dir>.!Sprites
+Set File$Type_DFE CSV

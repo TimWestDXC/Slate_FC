@@ -1,0 +1,280 @@
+/*
+ Title:   PICK
+
+ Purpose: A program to generate 5-a-side teams
+          with players who have not played together most
+
+ T. D. West, 27 June to 26 July 1996
+ integrated with the !Slate_FC application 30 September to 10 October 1996
+
+ T. D. West, 16 to 19 January 1997
+ Changed final score to be product of team scores instead of sum
+ and changed to new scoring method
+
+ T. D. West, 2 November 1999
+ Added rules for team selection
+
+ To do:
+  handle new player in list of 10 players
+  allow 4-a-side games
+
+*/
+
+#include <stdio.h>
+#include "constant.h"
+#include "data_io.h"
+#include "gpick.h"
+#include "pick.h"
+#include "rules.h"
+#include "types.h"
+
+#define NO_TEAM -1
+
+typedef struct {
+    int number;                         /* index into players[] */
+    int mate_score[PLAYERS_PER_SIDE];   /* own score is -1 */
+} player_score_rec_type;
+
+typedef struct {
+    player_score_rec_type player[PLAYERS_PER_SIDE];
+    int score;
+} team_type;
+
+typedef struct {
+    team_type team[2];
+    int score;
+} computed_type;
+
+computed_type picked;
+computed_type best[NO_SELECTIONS];
+
+void initialise(void) {
+    computed_type *btptr;
+    int i;
+    btptr = best;
+    for (i = 0; i < NO_SELECTIONS; i++) {
+        btptr->score = 0;
+        btptr++;
+    }
+}
+
+void set_other_team(void) {
+    int i;
+    int player;
+    int used[NO_PLAYERS];
+    for (i = 0; i < NO_PLAYERS; i++) {
+        used[i] = FALSE;
+    }
+    for (i = 0; i < PLAYERS_PER_SIDE; i++) {
+        used[picked.team[0].player[i].number] = TRUE;
+    }
+    player = 0;
+    for (i = 0; i < NO_PLAYERS; i++) {
+        if (!used[i]) {
+            picked.team[1].player[player++].number = i;
+        }
+    }
+}
+
+void add_team_to_best(computed_type *new) {
+    int insert = FALSE;
+    computed_type *const pfirst = &best[0];
+    computed_type *const plast  = &best[NO_SELECTIONS-1];
+    computed_type *pnew;
+    pnew = plast;
+    if (new->score > pnew->score) {
+        insert = TRUE;
+        while ((pnew != pfirst) && (new->score > pnew->score)) {
+            pnew--;
+        }
+        if (new->score < pnew->score) {
+            pnew++;
+        }
+    }
+    /*
+        we only do the following if we have set insert to TRUE
+    */
+    if (insert) {
+        computed_type *lptr;
+        computed_type *mptr;
+        /*
+            shift out smaller scoring data
+        */
+        lptr = plast;
+        mptr = lptr;
+        lptr--;
+        while (lptr >= pnew) {
+            /*
+                shift data
+            */
+            *mptr-- = *lptr--;
+        }
+        /*
+            store new data in required position
+        */
+        *pnew = *new;
+    }
+}
+
+int get_teamscore(selection_type *in, int team) {
+
+    int player;
+    int played;
+    int playerno;
+    int teamscore;
+    int index;
+    int mate;
+    int mate_no;
+    int mate_score;
+    int mate_index;
+
+    teamscore = 0;
+    /*
+        for each player in the team
+    */
+    for (player = 0; player < PLAYERS_PER_SIDE; player++) {
+        playerno = picked.team[team].player[player].number;
+        index = in->team[playerno];
+        played = games_played[index];
+        /*
+            for all other players in the team
+        */
+        for (mate = 0; mate < PLAYERS_PER_SIDE; mate++) {
+            mate_no = picked.team[team].player[mate].number;
+            mate_index = in->team[mate_no];
+            if (played == 0) {
+                mate_score = 0;
+            }
+            else {
+                mate_score = get_score(index, mate_index);
+                if (mate_score != SELF_SCORE) {
+                    mate_score = played - mate_score;
+                    mate_score *= 100;
+                    mate_score /= played;
+                    teamscore += mate_score;
+                }
+            }
+            picked.team[team].player[player].mate_score[mate] = mate_score;
+        }
+    }
+    return teamscore/2;
+}
+
+void export_bestpickdata(selection_type *in, selection_type *out) {
+    int selection;
+    int team;
+    int player;
+    int in_index;
+    int out_index;
+    selection_type *outptr;
+    outptr = out;
+    for (selection = 0; selection < NO_SELECTIONS; selection++) {
+        out_index = 0;
+        for (team = 0; team < 2; team++) {
+            for (player = 0; player < PLAYERS_PER_SIDE; player++) {
+                in_index = best[selection].team[team].player[player].number; /* 0..9 */
+                outptr->team[out_index++] = in->team[in_index];
+            }
+            outptr->score[team] = best[selection].team[team].score;
+        }
+        goalie_pick(outptr);
+        outptr++;
+    }
+}
+
+int team_of(int player_no) {
+    int i;
+    int team_no;
+    team_no = NO_TEAM; /* -1 as opposed to team 0 and team 1 */
+    for (i = 0; i < PLAYERS_PER_SIDE; i++) {
+        if (picked.team[0].player[i].number == player_no) {
+            team_no = 0;
+            break;
+        }
+        if (picked.team[1].player[i].number == player_no) {
+            team_no = 1;
+            break;
+        }
+    }
+    return team_no;
+}
+
+int rules_obeyed(void) {
+
+    int         all_rules_obeyed;
+    rlist_type *list_ptr;
+
+    all_rules_obeyed = TRUE;
+    list_ptr = apart_list;
+    while ((list_ptr != NULL) && all_rules_obeyed) {
+        if (team_of(list_ptr->player_no[0]) == team_of(list_ptr->player_no[1])) {
+            /*
+                two players are in the same team who should not be
+            */
+            all_rules_obeyed = FALSE;
+        }
+        list_ptr = list_ptr->next;
+    }
+    if (all_rules_obeyed) {
+        list_ptr = together_list;
+        while ((list_ptr != NULL) && all_rules_obeyed) {
+            if (team_of(list_ptr->player_no[0]) != team_of(list_ptr->player_no[1])) {
+                /*
+                    two players are not in the same team who should be
+                */
+                all_rules_obeyed = FALSE;
+            }
+            list_ptr = list_ptr->next;
+        }
+    }
+    return all_rules_obeyed;
+}
+
+void process_data(selection_type *in, selection_type *out) {
+
+    int i, j, k, m, n;
+
+    /*
+        generate all possible teams
+    */
+    picked.team[0].player[0].number = 0;
+    for (j = 1; j < NO_PLAYERS - 3; j++) {
+        for (k = j + 1; k < NO_PLAYERS - 2; k++) {
+            for (m = k + 1; m < NO_PLAYERS - 1; m++) {
+                for (n = m + 1; n < NO_PLAYERS; n++) {
+                    picked.team[0].player[1].number = j;
+                    picked.team[0].player[2].number = k;
+                    picked.team[0].player[3].number = m;
+                    picked.team[0].player[4].number = n;
+                    if (rules_obeyed()) {
+                        set_other_team();
+                        for (i = 0; i < 2; i++) {
+                            /*
+                                generate score for each team
+                            */
+                            picked.team[i].score = get_teamscore(in, i);
+                        }
+                        picked.score = picked.team[0].score * picked.team[1].score;
+                        /*
+                            add team to best team list
+                        */
+                        add_team_to_best(&picked);
+                    }
+                }
+            }
+        }
+    }
+    export_bestpickdata(in, out);
+}
+
+void pick_teams(selection_type *in, selection_type *out) {
+
+    initialise();
+    initialise_rule_list(apart_list);
+    initialise_rule_list(together_list);
+
+    if (score_data != NULL) {
+        process_data(in, out);
+    }
+}
+

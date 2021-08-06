@@ -1,0 +1,254 @@
+/*
+    AULib.h - a header file for the Acorn User WIMP C library
+    some enumerated types taken from wimp.h - Tim West 12/9/96
+*/
+
+#ifndef AULIB_H
+#define AULIB_H
+
+/* #Include the appropriate files - swis.h and kernel.h hold the information
+ * we need to call SWI functions from within C */
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "swis.h"
+#include "kernel.h"
+
+/* A few #defines to set up some constants */
+
+/* Wimp_Report_Error flag bits */
+#define WERRFLAG_OK_BOX           (1 << 0)
+#define WERRFLAG_CANCEL_BOX       (1 << 1)
+#define WERRFLAG_HIGHLIGHT        (1 << 2)
+#define WERRFLAG_TEXT_RETURN      (1 << 3)
+#define WERRFLAG_NO_ERROR_FROM    (1 << 4)
+#define WERRFLAG_IMMEDIATE_RETURN (1 << 5)
+#define WERRFLAG_SELECT_ONE       (1 << 6)
+
+#define IBAR_ONRIGHT	-1
+#define IBAR_ONLEFT	-2
+#define IBAR_PRIOR_APP	0
+
+/* #Defines for icon flags */
+#define ICON_ISTEXT	1u << 0
+#define ICON_ISSPRITE	1u << 1
+#define ICON_HASBORDER	1u << 2
+#define ICON_HCENTRE	1u << 3
+#define ICON_VCENTRE	1u << 4
+#define ICON_ISFILLED	1u << 5
+#define ICON_CLICKNOTIFIESONCE	3u << 12
+
+/* These are for a StyleGuide-compliant square iconbar icon - without text */
+#define IBAR_BBOX_MINX	0
+#define IBAR_BBOX_MINY	0
+#define IBAR_BBOX_MAXX	68
+#define IBAR_BBOX_MAXY	68
+
+/* These are for a StyleGuide-compliant square iconbar icon - with text */
+#define IBART_BBOX_MINX	0
+#define IBART_BBOX_MINY	20
+#define IBART_BBOX_MAXX	68
+#define IBART_BBOX_MAXY	84
+
+/* #Defines for menu creation */
+
+#define MENU_TITLEFORE	7u
+#define MENU_TITLEBACK	2u << 8
+#define MENU_WORKFORE	7u << 16
+#define MENU_WORKBACK	0u << 24 /* these define colours */
+#define MENU_TICK	1u << 0
+#define MENU_DOTTED	1u << 1
+#define MENU_LASTITEM	1u << 7
+#define MENU_SHADED	1u << 22
+
+#define MENUITEM_FORE	7u << 24
+#define MENUITEM_BACK	0u << 28
+
+#define MENU_WIDTH	172 /* could be more intelligent, but it's a start */
+#define MENU_HEIGHT	44 /* by order of the Style Guide */
+#define MENU_VERTGAP	0
+
+/* Sizes for block definitions */
+
+#define ICON_BLOCK_SIZE	40
+
+/* Other miscellaneous definitions */
+
+#define SAVEDRAG_TYPE	5
+
+/* Enumeration definitions */
+
+typedef enum {                 /* button state bits */
+  wimp_BRIGHT       = 0x001,
+  wimp_BMID         = 0x002,
+  wimp_BLEFT        = 0x004,
+  wimp_BDRAGRIGHT   = 0x010,
+  wimp_BDRAGLEFT    = 0x040,
+  wimp_BCLICKRIGHT  = 0x100,
+  wimp_BCLICKLEFT   = 0x400
+} wimp_bbits;
+
+typedef enum {               /* event types */
+  wimp_ENULL,                /* null event */
+  wimp_EREDRAW,              /* redraw event */
+  wimp_EOPEN,
+  wimp_ECLOSE,
+  wimp_EPTRLEAVE,
+  wimp_EPTRENTER,
+  wimp_EBUT,                 /* mouse button change */
+  wimp_EUSERDRAG,
+  wimp_EKEY,
+  wimp_EMENU,
+  wimp_ESCROLL,
+  wimp_ELOSECARET,
+  wimp_EGAINCARET,
+  wimp_ESEND = 17,        /* send message, don't worry if it doesn't arrive */
+  wimp_ESENDWANTACK = 18, /* send message, return ack if not acknowledged */
+  wimp_EACK = 19          /* acknowledge receipt of message. */
+} wimp_etype;
+
+typedef enum {               /* event type masks */
+  wimp_EMNULL     = 1 << wimp_ENULL,
+  wimp_EMREDRAW   = 1 << wimp_EREDRAW,
+  wimp_EMOPEN     = 1 << wimp_EOPEN,
+  wimp_EMCLOSE    = 1 << wimp_ECLOSE,
+  wimp_EMPTRLEAVE = 1 << wimp_EPTRLEAVE,
+  wimp_EMPTRENTER = 1 << wimp_EPTRENTER,
+  wimp_EMBUT      = 1 << wimp_EBUT,
+  wimp_EMUSERDRAG = 1 << wimp_EUSERDRAG,
+  wimp_EMKEY      = 1 << wimp_EKEY,
+  wimp_EMMENU     = 1 << wimp_EMENU,
+  wimp_EMSCROLL   = 1 << wimp_ESCROLL,
+  wimp_EMLOSECARET= 1 << wimp_ELOSECARET,
+  wimp_EMGAINCARET= 1 << wimp_EGAINCARET,
+  wimp_EMSEND     = 1 << wimp_ESEND,
+  wimp_EMSENDWANTACK
+                  = 1 << wimp_ESENDWANTACK,
+  wimp_EMACK      = 1 << wimp_EACK
+} wimp_emask;
+
+/* Message action codes are allocated just like SWI codes. */
+typedef enum {
+  wimp_MCLOSEDOWN    = 0, /* Reply if any dialogue with the user is required,
+                             and the closedown sequence will be aborted. */
+  wimp_MDATASAVE     = 1, /* request to identify directory */
+  wimp_MDATASAVEOK   = 2, /* reply to message type 1 */
+  wimp_MDATALOAD     = 3, /* request to load/insert dragged icon */
+  wimp_MDATALOADOK   = 4, /* reply that file has been loaded */
+  wimp_MDATAOPEN     = 5, /* warning that an object is to be opened */
+  wimp_MRAMFETCH     = 6, /* transfer data to buffer in my workspace */
+  wimp_MRAMTRANSMIT  = 7, /* I have transferred some data to a buffer in your
+                             workspace */
+  wimp_MPREQUIT      = 8,
+  wimp_PALETTECHANGE = 9,
+  wimp_SAVEDESK      = 10, /* Wimp 2.43 onwards - desktop closedown message */
+  wimp_MDEVICECLAIM  = 11, /* Broadcast before an application can claim parallel port, RS232 port etc. */
+  wimp_MDEVICEINUSE  = 12, /* Reply if another application is already using the device */
+  wimp_MDATASAVED    = 13, /* A file previously saved has become 'safe' */
+
+  wimp_FilerOpenDir  = 0x0400,
+  wimp_FilerCloseDir = 0x0401,
+
+  wimp_Notify        = 0x40040,  /* net filer notify broadcast */
+
+  wimp_MMENUWARN     = 0x400c0,
+  /* menu warning. Sent if wimp_MSUBLINKMSG set. Data sent is:
+         submenu field of relevant wimp_menuitem.
+         screen x-coord
+         screen y-coord
+         list of menu selection indices (0..n-1 for each menu)
+         terminating -1 word.
+     Typical response is to call wimp_create_submenu.
+  */
+  wimp_MMODECHANGE   = 0x400c1,
+  wimp_MINITTASK     = 0x400c2,
+  wimp_MCLOSETASK    = 0x400c3,
+  wimp_MSLOTCHANGE   = 0x400c4,       /* Slot size has altered */
+  wimp_MSETSLOT      = 0x400c5,       /* Task manager requests application
+                                         to change its slot size */
+  wimp_MTASKNAMERQ   = 0x400c6,       /* Request task name */
+  wimp_MTASKNAMEIS   = 0x400c7,       /* Reply to task name request */
+  wimp_MTASKSTARTED  = 0x400c8,       /* Broadcast by task to indicate that it has now fully started */
+
+  wimp_MHELPREQUEST  = 0x502,         /* interactive help request */
+  wimp_MHELPREPLY    = 0x503,         /* interactive help message */
+
+  /* Messages for dialogue with printer applications */
+
+  wimp_MPrintFile       = 0x80140,    /* Printer app's first response to */
+                                      /* a DATASAVE */
+  wimp_MWillPrint       = 0x80141,    /* Acknowledgement of PrintFile */
+  wimp_MPrintTypeOdd    = 0x80145,    /* Broadcast when strange files */
+                                      /* dropped on the printer */
+  wimp_MPrintTypeKnown  = 0x80146,    /* Ack to above */
+  wimp_MPrinterChange   = 0x80147     /* New printer application installed */
+
+} wimp_msgaction;
+
+typedef enum {           /* menu item flag set */
+  wimp_MTICK       = 1,
+  wimp_MSEPARATE   = 2,
+  wimp_MWRITABLE   = 4,
+  wimp_MSUBLINKMSG = 8, /* show a => flag, and inform program when it
+                           is activated. */
+  wimp_MLAST = 0x80     /* signal last item in the menu */
+} wimp_menuflags;
+/* use wimp_INOSELECT to shade the item as unselectable,
+and the button type to mark it as writable. */
+
+/* Structure definitions */
+
+typedef struct window_data {
+	int	win_handle;
+	unsigned char	*buffer;
+	unsigned char	*workspace;
+	char *win_name;
+} window_data;
+
+typedef struct menu_element {
+	long int flags;
+	long int submenu;
+	long int menu_iconflags;
+	char menu_text[12];
+	struct menu_element *next_menuelem;
+} menu_element;
+
+typedef struct menu_data {
+	char title[12];
+	int size;
+	long int colours;
+	long int width;
+	long int height;
+	long int vert_gap;
+	unsigned char* datablock;
+	menu_element *next_menuelem;
+} menu_data;
+
+/* Prototyping */
+extern void              au_invert_icon_state(unsigned long int win_h, unsigned long int icon_h);
+extern void              au_enable_icon(unsigned long int win_h, unsigned long int icon_h);
+extern void              au_disable_icon(unsigned long int win_h, unsigned long int icon_h);
+extern int               au_initialise(int, const char *, long int[]);
+extern void              au_closedown(int);
+extern int               au_create_iconbar_icon(int, unsigned long int, unsigned long int, const char *);
+extern void              au_wordtobyte(unsigned long int, unsigned char[], int);
+extern unsigned long int au_bytetoword(unsigned char[], int);
+extern void              au_opentemplate(const char *);
+extern void              au_closetemplate(void);
+extern int               au_loadtemplate(const char *, window_data *, int);
+extern int               au_report_error(int, const char *, int, const char *);
+extern void              au_openwin_from_templatedata(window_data *, long int);
+extern int               au_wimp_poll(int, const unsigned char *);
+extern void              au_icon_text_change(const char *, unsigned long int, unsigned long int);
+extern void              au_icon_number_change(int, unsigned long int, unsigned long int);
+extern char             *au_get_ptr_to_icontext(unsigned long int, unsigned long int);
+extern void              au_buildmenu(const char *, menu_data *);
+extern void              au_addtomenu(const char *, long int, long int, long int, menu_data *);
+extern void              au_createmenu(menu_data *);
+extern void              au_openmenu(menu_data *, int, int);
+extern void	         au_icon_get_text(char *, unsigned long int, unsigned long int);
+extern void              au_destructmenuelem(menu_element *melem);
+extern void              au_destructmenu(menu_data *mdata);
+
+#endif

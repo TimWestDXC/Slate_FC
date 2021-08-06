@@ -1,0 +1,178 @@
+/*
+    gpick
+
+    T. D. West 2 - 12 August 1996
+    integrated into !Slate_FC application from XGPICK
+    T. D. West 10 to 11 October 1996
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "constant.h"
+#include "data_io.h"
+#include "types.h"
+
+typedef struct {
+    int  score[PLAYERS_PER_SIDE];   /* score for each goalie position */
+    char goalie;                    /* final result */
+} player_result_rec_type;
+
+player_result_rec_type goalman[NO_PLAYERS];
+
+int two_power(int index) {
+    int result;
+    result = 1;
+    while (index) {
+        result <<= 1;
+        index--;
+    }
+    return result;
+}
+
+int goalie_score(int len, int no) {
+    return two_power(no) + 10 + no - len;
+}
+
+void generate_scores(selection_type *in) {
+    int i, j, len;
+    int pidx;
+    char done[PLAYERS_PER_SIDE];
+    goalie_data_type *aptr;
+    char *rptr;
+    char *sptr;
+    char goalie;
+    for (i = 0; i < NO_PLAYERS; i++) {
+        pidx = in->team[i];
+        aptr = goalie_data + pidx;
+        rptr = aptr->raw;
+        len  = aptr->length;
+        for (j = 0; j < PLAYERS_PER_SIDE; j++) {
+            done[j] = FALSE;
+            goalman[i].score[j] = goalie_score(len, len);    /* set default for any unused goalie positions */
+        }
+        if (len != 0) {
+            int *s;
+            sptr = rptr + len - 1;  /* point to last goalie position */
+            for (j = 0; j < len; j++) {
+                goalie = *sptr--;
+                goalie--;
+                s = &goalman[i].score[goalie];
+                if (!done[goalie]) {
+                    done[goalie] = TRUE;
+                    *s = goalie_score(len, j);
+                }
+                else {
+                    *s >>= 1;
+                }
+            }
+        }
+    }
+}
+
+void calc_goalies(char team) {
+    int  best_score;
+    char best_goalman[PLAYERS_PER_SIDE];
+    char done[PLAYERS_PER_SIDE];
+    int  score;
+    char a, b, c, d, e;
+    char playerno;
+    best_score = 0;
+    for (a = 0; a < PLAYERS_PER_SIDE; a++) {
+        /* clear all done[] */
+        done[a] = FALSE;
+    }
+    for (a = 0; a < PLAYERS_PER_SIDE; a++) {
+        playerno = team * PLAYERS_PER_SIDE;
+        done[a] = TRUE;
+        score = goalman[playerno++].score[a];
+        for (b = 0; b < PLAYERS_PER_SIDE; b++) {
+            if (!done[b]) {
+                done[b] = TRUE;
+                score += goalman[playerno++].score[b];
+                for (c = 0; c < PLAYERS_PER_SIDE; c++) {
+                    if (!done[c]) {
+                        done[c] = TRUE;
+                        score += goalman[playerno++].score[c];
+                        for (d = 0; d < PLAYERS_PER_SIDE; d++) {
+                            if (!done[d]) {
+                                done[d] = TRUE;
+                                score += goalman[playerno++].score[d];
+                                for (e = 0; e < PLAYERS_PER_SIDE; e++) {
+                                    if (!done[e]) {
+                                        done[e] = TRUE;
+                                        score += goalman[playerno++].score[e];
+                                        if (score > best_score) {
+                                            best_score = score;
+                                            best_goalman[0] = a;
+                                            best_goalman[1] = b;
+                                            best_goalman[2] = c;
+                                            best_goalman[3] = d;
+                                            best_goalman[4] = e;
+                                        }
+                                        score -= goalman[--playerno].score[e];
+                                        done[e] = FALSE;
+                                    }
+                                }
+                                score -= goalman[--playerno].score[d];
+                                done[d] = FALSE;
+                            }
+                        }
+                        score -= goalman[--playerno].score[c];
+                        done[c] = FALSE;
+                    }
+                }
+                score -= goalman[--playerno].score[b];
+                done[b] = FALSE;
+            }
+        }
+        done[a] = FALSE;
+    }
+    playerno = team * PLAYERS_PER_SIDE;
+    for (a = 0; a < PLAYERS_PER_SIDE; a++) {
+        goalman[playerno + a].goalie = best_goalman[a] + 1;
+    }
+}
+
+void order_goalies(selection_type *out) {
+    selection_type temp;
+    char team;
+    int  i;
+    char order[2][PLAYERS_PER_SIDE];
+    char playerno;
+    char offset;
+    for (team = 0; team < 2; team++) {
+        temp.score[team] = out->score[team]; /* don't want to copy back garbage */
+        offset = team * PLAYERS_PER_SIDE;
+        for (i = 0; i < PLAYERS_PER_SIDE; i++) {
+            playerno = offset + i;
+            order[team][goalman[playerno].goalie - 1] = playerno;
+        }
+        for (i = 0; i < PLAYERS_PER_SIDE; i++) {
+            playerno = offset + i;
+            temp.team[playerno] = out->team[order[team][i]];
+        }
+    }
+   *out = temp;
+}
+
+void allocate_goalies(selection_type *out) {
+    char team;
+    for (team = 0; team < 2; team++) {
+        /*
+            calculate goalies
+        */
+        calc_goalies(team);
+    }
+    order_goalies(out);
+}
+
+void goalie_pick(selection_type *in) {
+
+    if (goalie_data != NULL) {
+        /*
+            generate scores and allocate goalies
+        */
+        generate_scores(in);  /* calculate goalie scores for all players */
+        allocate_goalies(in);
+    }
+}

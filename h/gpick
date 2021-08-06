@@ -1,0 +1,16 @@
+/*
+    gpick.h
+
+    T. D. West 2 - 12 August 1996
+    integrated into !Slate_FC application from XGPICK
+    T. D. West 10 to 11 October 1996
+*/
+#ifndef _GPICK_
+#define _GPICK_
+
+#include "constant.h"
+#include "types.h"
+
+extern void goalie_pick(selection_type *in);
+
+#endif

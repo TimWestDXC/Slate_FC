@@ -1,0 +1,21 @@
+/*
+    TYPES.H
+    for !Slate_FC application
+    T. D. West 7 to 22 October 1996
+*/
+#ifndef _TYPES_
+#define _TYPES_
+
+#include "constant.h"
+
+typedef struct {
+    int  picked;
+    char name[PLAYER_NAME_SIZE];
+} player_rec_type;
+
+typedef struct {
+    int team[NO_PLAYERS]; /* value is icon no of picked player or NON_PLAYER */
+    int score[2];         /* left & right */
+} selection_type;
+
+#endif

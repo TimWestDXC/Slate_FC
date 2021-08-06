@@ -1,0 +1,273 @@
+/*
+    DATA_IO
+
+    T. D. West 9 to 11 October 1996
+    T. D. West 16 January 1997
+    updated to use new scoring method
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "constant.h"
+#include "data_io.h"
+
+int no_players;
+int datasize;
+gen_rec_type     *score_data;              /* assigned by malloc() */
+goalie_data_type *goalie_data;             /* assigned by malloc() */
+int              *games_played;            /* assigned by malloc() */
+
+gen_rec_type *groffset(int index) {
+    /*
+        calculate offset of player[index] score data
+    */
+    char *cptr = (char *)score_data;
+    cptr += (index * datasize);
+    return (gen_rec_type *)cptr;
+}
+
+int *score_ptr(int a, int b) {
+    int *sptr;
+    gen_rec_type *aptr;
+    aptr = groffset(a);
+    sptr = &aptr->score[b];
+    return sptr;
+}
+
+int get_score(int a, int b) {
+    int *sptr;
+    sptr = score_ptr(a, b);
+    return *sptr;
+}
+
+void set_score(int a, int b, int score) {
+    int *sptr;
+    sptr = score_ptr(a, b);
+    *sptr = score;
+}
+
+void import_datafile(void) {
+    /*
+        This function opens the data file,
+        reads the data into memory
+        and returns the address of the data
+        It also sets the exported variables no_players and datasize
+        If it cannot do any part of this then score_data is set to NULL
+        and no_players is set to 0.
+        Also it reads the games_played data from the played file into memory
+        If it cannot do any part of this then games_played is set to NULL
+    */
+    FILE *fdata;
+
+    /*
+        Open the data file
+    */
+    score_data = NULL;
+    no_players = 0;
+    if ((fdata = fopen(data_filename, "rb")) != NULL) {
+        /*
+            The data file is open
+            Read the number of players from the file into no_players
+        */
+        fread(&no_players, sizeof(int), 1, fdata);
+        /*
+            Now calculate the size of data per player record
+        */
+        datasize = sizeof(int) * no_players;
+        /*
+            Now allocate enough memory for the data for all players
+        */
+        score_data = (gen_rec_type *)malloc(datasize * no_players);
+        if (score_data != NULL) {
+            /*
+                We have allocated memory
+                so read the data from the file into memory
+            */
+            fread(score_data, datasize, no_players, fdata);
+        }
+        /*
+            Now close the data file
+        */
+        fclose(fdata);
+        /*
+            Open the games played data file
+        */
+        games_played = NULL;
+        if ((fdata = fopen(played_filename, "rb")) != NULL) {
+            /*
+                The data file is open
+                Now allocate enough memory for the data for all players
+            */
+            games_played = (int *)malloc(sizeof(int) * no_players);
+            if (games_played != NULL) {
+                /*
+                    We have allocated memory
+                    so read the data from the file into memory
+                */
+                fread(games_played, sizeof(int), no_players, fdata);
+            }
+            /*
+                Now close the data file
+            */
+            fclose(fdata);
+        }
+    }
+}
+
+void export_datafile(void) {
+
+    if (score_data != NULL) {
+        FILE *fdata;
+        /*
+            Output data to data file
+        */
+        remove(databak_filename);
+        rename(data_filename, databak_filename);
+        fdata = fopen(data_filename, "wb");
+        if (fdata != NULL) {
+            fwrite(&no_players, sizeof(int), 1,          fdata);
+            fwrite(score_data,  datasize,    no_players, fdata);
+        }
+        fclose(fdata);
+    }
+    if (games_played != NULL) {
+        FILE *fdata;
+        /*
+            Output data to data file
+        */
+        remove(playedbak_filename);
+        rename(played_filename, playedbak_filename);
+        fdata = fopen(played_filename, "wb");
+        if (fdata != NULL) {
+            fwrite(games_played, sizeof(int), no_players, fdata);
+        }
+        fclose(fdata);
+    }
+}
+
+void import_goaliefile(void) {
+
+    FILE *fdata;
+    int   datasize;
+    /*
+        open goalie file
+    */
+    fdata = fopen(goalies_filename, "rb");
+    if (fdata != NULL) {
+        /*
+            goalie file now open OK
+            read no_players as held in goalie file
+            which should equal no_players
+        */
+        fread(&datasize, sizeof(int), 1, fdata);
+        if (datasize == no_players) {
+            /*
+                read all data into dynamically allocated memory
+                create space for a goalie_data_type per player
+            */
+            datasize = sizeof(goalie_data_type);
+            goalie_data = (goalie_data_type *)malloc(no_players * datasize);
+            if (goalie_data != NULL) {
+                /*
+                    space allocated for goalie_data OK
+                    now read in the data
+                */
+                goalie_data_type *grptr;
+                char *lptr;
+                int i;
+
+                grptr = goalie_data;
+                for (i = 0; i < no_players; i++) {
+                    fread(&(grptr->offset), sizeof(int), 1, fdata);
+                    fread(&(grptr->length), sizeof(int), 1, fdata);
+                    grptr++;
+                }
+                /*
+                    we should now be pointing at the raw goalie data in the file
+                    now create space for each player goalie list and read it in
+                */
+                grptr = goalie_data;
+                for (i = 0; i < no_players; i++) {
+                    /*
+                        find how much goalie data for each player
+                    */
+                    datasize = grptr->length;
+                    /*
+                        allocate that much space plus an extra 8 bytes
+                    */
+                    lptr = (char *)malloc(datasize + 8);
+                    if (lptr != NULL) {
+                        /*
+                            clear the allocated memory then
+                            read the goalie data into memory
+                        */
+                        memset(lptr, 0, datasize + 8);
+                        fread(lptr, datasize, 1, fdata);
+                        grptr->raw = lptr;  /* store the pointer to the data */
+                    }
+                    else {
+                        printf("Can't allocate memory for goalie data[%d]\n", i);
+                    }
+                    grptr++; /* point to the next goalie_data_type */
+                }
+            }
+            else {
+                printf("Can't allocate memory for goalie_link_type data\n");
+            }
+        }
+        else {
+            printf("Mis-match with number of players\n");
+        }
+        fclose(fdata);
+    }
+    else {
+        printf("Can't open data file\n");
+    }
+}
+
+void export_goaliefile(void) {
+
+    goalie_data_type *grptr;
+    int offset;
+    int len;
+    int i;
+    FILE *fdata;
+
+    remove(goalbak_filename);
+    rename(goalies_filename, goalbak_filename);
+    fdata = fopen(goalies_filename, "wb");
+    if (fdata != NULL) {
+        fwrite(&no_players, sizeof(int), 1, fdata);
+        /*
+            recalculate all the offsets (lengths already done)
+        */
+        grptr  = goalie_data;
+        offset = grptr->offset;
+        len    = grptr->length;
+        for (i = 1; i < no_players; i++) {
+            offset += len;
+            grptr++;
+            grptr->offset = offset;
+            len = grptr->length;
+        }
+        /*
+            write back the goalie offset & link data for each player
+        */
+        grptr = goalie_data;
+        for (i = 0; i < no_players; i++) {
+            fwrite(&grptr->offset, sizeof(int), 1, fdata);
+            fwrite(&grptr->length, sizeof(int), 1, fdata);
+            grptr++;
+        }
+        /*
+            write back the modified raw goalie data
+        */
+        grptr = goalie_data;
+        for (i = 0; i < no_players; i++) {
+            fwrite(grptr->raw, grptr->length, sizeof(char), fdata);
+            grptr++;
+        }
+        fclose(fdata);
+    }
+}
+

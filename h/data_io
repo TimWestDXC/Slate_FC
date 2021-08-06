@@ -1,0 +1,42 @@
+/*
+    data_io.h
+
+    T. D. West 9 to 11 October 1996
+    T. D. West 16 January 1997
+    Added games_played
+*/
+#ifndef _DATA_IO_
+#define _DATA_IO_
+
+#define UNUSED_SCORE  0
+#define SELF_SCORE    -1
+
+typedef struct {
+    int score[1];   /* size unknown until no_players found */
+} gen_rec_type;
+
+/*
+    the following struct is used to hold the data from the goalie data file
+*/
+typedef struct {
+    int   offset;
+    int   length;
+    char *raw;             /* assigned by malloc() */
+} goalie_data_type;
+
+extern int no_players;
+extern int datasize;
+extern gen_rec_type     *score_data;
+extern goalie_data_type *goalie_data;
+extern int              *games_played;
+
+extern gen_rec_type *groffset(int index);
+extern int *score_ptr(int a, int b);
+extern int get_score(int a, int b);
+extern void set_score(int a, int b, int score);
+extern void import_datafile(void);
+extern void export_datafile(void);
+extern void import_goaliefile(void);
+extern void export_goaliefile(void);
+
+#endif

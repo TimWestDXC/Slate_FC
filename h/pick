@@ -1,0 +1,20 @@
+/*
+//
+// Title:   PICK.H
+//
+// Purpose: A program to generate 5-a-side teams
+//          with players who have not played together most
+//
+// T. D. West, 27 June to 26 July 1996
+// integrated with the !Slate_FC application 30 September to 6 October 1996
+//
+*/
+
+#ifndef _PICK_
+#define _PICK_
+
+#include "types.h"
+
+extern void pick_teams(selection_type *in, selection_type *out);
+
+#endif

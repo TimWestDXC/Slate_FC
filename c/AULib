@@ -1,0 +1,397 @@
+/* Acorn User library for WIMP programming in C */
+/* By Steve Mumford, 16th July 1996 */
+
+/* #Include the appropriate files - AULib.h contains everything we need */
+
+#include "AUlib.h"
+
+#define ICON_SHADE (1u<<22)
+
+void au_invert_icon_state(unsigned long int win_h, unsigned long int icon_h) {
+
+    _kernel_swi_regs regs_in, regs_out;
+    unsigned char icon_block[ICON_BLOCK_SIZE];
+
+    regs_in.r[1] = (int)icon_block;
+    au_wordtobyte(win_h,      icon_block, 0);
+    au_wordtobyte(icon_h,     icon_block, 4);
+    au_wordtobyte(ICON_SHADE, icon_block, 8);
+    au_wordtobyte(0,          icon_block, 12);
+    _kernel_swi(Wimp_SetIconState, &regs_in, &regs_out);
+}
+
+void au_enable_icon(unsigned long int win_h, unsigned long int icon_h) {
+
+    _kernel_swi_regs regs_in, regs_out;
+    unsigned char icon_block[ICON_BLOCK_SIZE];
+
+    regs_in.r[1] = (int)icon_block;
+    au_wordtobyte(win_h,      icon_block, 0);
+    au_wordtobyte(icon_h,     icon_block, 4);
+    au_wordtobyte(0,          icon_block, 8);
+    au_wordtobyte(ICON_SHADE, icon_block, 12);
+    _kernel_swi(Wimp_SetIconState, &regs_in, &regs_out);
+}
+
+void au_disable_icon(unsigned long int win_h, unsigned long int icon_h) {
+
+    _kernel_swi_regs regs_in, regs_out;
+    unsigned char icon_block[ICON_BLOCK_SIZE];
+
+    regs_in.r[1] = (int)icon_block;
+    au_wordtobyte(win_h,      icon_block, 0);
+    au_wordtobyte(icon_h,     icon_block, 4);
+    au_wordtobyte(ICON_SHADE, icon_block, 8);
+    au_wordtobyte(ICON_SHADE, icon_block, 12);
+    _kernel_swi(Wimp_SetIconState, &regs_in, &regs_out);
+}
+
+int au_initialise(int v_number, const char *appname, long int msglist[]) {
+
+    _kernel_swi_regs regs_in, regs_out;
+
+    regs_in.r[0] = v_number;
+    regs_in.r[1] = *(int *)"TASK";
+    regs_in.r[2] = (int)appname;
+    regs_in.r[3] = (int)msglist;
+
+    _kernel_swi(Wimp_Initialise, &regs_in, &regs_out);
+    return regs_out.r[1]; /* this is the task handle, returned for later use */
+}
+
+void au_closedown(int taskhandle) {
+
+    _kernel_swi_regs regs_in, regs_out;
+
+    regs_in.r[0] = taskhandle;
+    regs_in.r[1] = *(int *)"TASK";
+    _kernel_swi(Wimp_CloseDown, &regs_in, &regs_out);
+}
+
+int au_create_iconbar_icon(int priority, unsigned long int whichside, unsigned long int iconflags, const char *sprname) {
+
+    _kernel_swi_regs	regs_in, regs_out;
+    unsigned char icon_block[ICON_BLOCK_SIZE];
+    /* We need to build up an icon information datablock */
+    au_wordtobyte(whichside, icon_block, 0);
+    au_wordtobyte(IBAR_BBOX_MINX, icon_block, 4);
+    au_wordtobyte(IBAR_BBOX_MINY, icon_block, 8);
+    au_wordtobyte(IBAR_BBOX_MAXX, icon_block, 12);
+    au_wordtobyte(IBAR_BBOX_MAXY, icon_block, 16);
+    au_wordtobyte(iconflags, icon_block, 20);
+    /* Copy the icon name into the appropriate place */
+    strcpy( (char *) &icon_block[24], sprname);
+    regs_in.r[0] = priority;
+    regs_in.r[1] = (int) icon_block;
+    _kernel_swi(Wimp_CreateIcon, &regs_in, &regs_out);
+    return regs_out.r[0]; /* Return the icon handle */
+}
+
+void au_wordtobyte(unsigned long int input, unsigned char block[], int index) {
+
+    unsigned long int mask = 255;
+
+    /* The opposite of btow() - this function takes a 32-bit integer, splits
+     * it up into 4 bytes, and stores those in 4 consecutive cells of a
+     * character array indexed by index. This is done by using a mask to
+     * extract the data in sequence, with the & bitwise-and operator */
+    block[index++] = (char) (input & mask);
+
+    /* shift mask to get second byte, and supply result as byte size */
+    mask <<= 8;
+    block[index++] = (char) ((input & mask) >> 8);
+    mask <<= 8;
+    block[index++] = (char) ((input & mask) >> 16);
+    mask <<= 8;
+    block[index++] = (char) ((input & mask) >> 24);
+}
+
+unsigned long int au_bytetoword(unsigned char block[], int index) {
+
+    unsigned long int result = 0;
+    int loop;
+    /* This routine takes a data block and a starting byte, and converts the
+     * next four bytes into a word - we have to start at the most significant
+     * byte and work backwards */
+    index += 3;
+    result = block[index--];
+    for(loop = 0; loop < 3; loop++) {
+        result = result << 8; /* this shifts bits in result left by 8 spaces */
+        result += block[index--];
+    }
+    return result;
+}
+
+void au_opentemplate(const char *filename) {
+    _kernel_swi_regs	regs_in, regs_out;
+    regs_in.r[1] = (int) filename;
+    _kernel_swi(Wimp_OpenTemplate, &regs_in, &regs_out);
+}
+
+void au_closetemplate(void) {
+    _kernel_swi_regs	regs_in, regs_out;
+    /* No data needed for CloseTemplate */
+    _kernel_swi(Wimp_CloseTemplate, &regs_in, &regs_out);
+}
+
+int au_loadtemplate(const char *template_name, window_data *win_data, int call) {
+
+    _kernel_swi_regs	regs_in, regs_out;
+    int	workspace_length = 0;
+    int	next_entry;
+
+    /* interrogate file to find out how much space we need */
+    regs_in.r[1] = 0; /* tell SWI to find sizes */
+    regs_in.r[4] = -1; /* NO FONTS CATERED FOR IN TEMPLATES YET */
+    regs_in.r[5] = (int) template_name; /* pass name to SWI */
+    regs_in.r[6] = call; /* 0 for first call */
+
+    _kernel_swi(Wimp_LoadTemplate, &regs_in, &regs_out);
+    win_data->buffer = calloc(regs_out.r[1], sizeof(unsigned char));
+    workspace_length = regs_out.r[2]; /* err on side of caution */
+    win_data->workspace = calloc(workspace_length, sizeof(unsigned char));
+    win_data->win_name = calloc(strlen( (char *) regs_out.r[5]) + 1, sizeof(char));
+    strcpy(win_data->win_name, (char *) regs_out.r[5]);
+
+    /* Now reload template from file into memory */
+    regs_in.r[1] = (int) win_data->buffer;
+    regs_in.r[2] = (int) win_data->workspace;
+    regs_in.r[3] = (int) win_data->workspace + workspace_length;
+    regs_in.r[4] = -1; /* NO FONTS CATERED FOR IN TEMPLATES YET */
+    regs_in.r[5] = (int) win_data->win_name;
+    regs_in.r[6] = call;
+
+    _kernel_swi(Wimp_LoadTemplate, &regs_in, &regs_out);
+
+    next_entry = regs_out.r[6];
+
+    /* Create the window, store window handle */
+    regs_in.r[1] = (int) win_data->buffer;
+    _kernel_swi(Wimp_CreateWindow, &regs_in, &regs_out);
+    win_data->win_handle = regs_out.r[0];
+
+    return next_entry; /* in case of wildcarded searches */
+}
+
+int au_report_error(int errno, const char *errmess, int flags, const char *app_name) {
+
+    unsigned char errorblock[260];
+    _kernel_swi_regs in, out;
+
+    /* Set up the standard error block with the error number and message (zero terminated) */
+    au_wordtobyte(errno, errorblock, 0);
+    strcpy((char *)&errorblock[4], errmess);
+
+    /* R0 - pointer to standard error block
+       R1 - error window flags
+       R2 - pointer to application name for error box title */
+
+    in.r[0] = (int)errorblock;
+    in.r[1] = flags;
+    in.r[2] = (int)app_name;
+
+    _kernel_swi(Wimp_ReportError, &in, &out);
+
+    /* Returns 1 if OK selected, 2 if Cancel selected */
+    return out.r[1];
+}
+
+void au_openwin_from_templatedata(window_data *win_data, long int position) {
+    _kernel_swi_regs	regs_in, regs_out;
+    unsigned char	openwindow_buffer[36];
+    int	i;
+    au_wordtobyte( (unsigned long int) win_data->win_handle, openwindow_buffer, 0);
+    for(i = 0; i < 6; i++) {
+        au_wordtobyte(au_bytetoword(win_data->buffer, i*4), openwindow_buffer, (i+1) * 4);
+    }
+    au_wordtobyte(position, openwindow_buffer, 28);
+    regs_in.r[1] = (int) openwindow_buffer;
+    _kernel_swi(Wimp_OpenWindow, &regs_in, &regs_out);
+}
+
+int au_wimp_poll(int pollmask, const unsigned char *pollblock) {
+
+    _kernel_swi_regs	regs_in, regs_out;
+
+    regs_in.r[0] = pollmask;
+    regs_in.r[1] = (int) pollblock;
+    _kernel_swi(Wimp_Poll, &regs_in, &regs_out);
+    return regs_out.r[0]; /* Return the event code */
+}
+
+void au_icon_text_change(const char *text, unsigned long int win_h, unsigned long int icon_h) {
+
+    _kernel_swi_regs regs_in, regs_out;
+    char *text_pointer;
+    unsigned char temp_buffer[256];
+
+    /* Find out where the icon's indirected text is stored in memory and copy
+       a new string to it */
+    text_pointer = au_get_ptr_to_icontext(win_h, icon_h);
+    strcpy(text_pointer, text);
+
+    /* Now we need to inform the WIMP that the icon needs redrawing by setting
+       the icon flags - we don't actually change them with this call, but this
+       spurs the WIMP into action */
+
+    au_wordtobyte(win_h,  temp_buffer, 0);
+    au_wordtobyte(icon_h, temp_buffer, 4);
+    au_wordtobyte(0,      temp_buffer, 8);
+    au_wordtobyte(0,      temp_buffer, 12);
+
+    regs_in.r[1] = (int)temp_buffer;
+
+    _kernel_swi(Wimp_SetIconState, &regs_in, &regs_out);
+}
+
+void au_icon_number_change(int number, unsigned long int win_h, unsigned long int icon_h) {
+
+    _kernel_swi_regs regs_in, regs_out;
+    char *text_pointer;
+    unsigned char temp_buffer[256];
+
+    /* Find out where the icon's indirected text is stored in memory and copy
+       a new string to it */
+    text_pointer = au_get_ptr_to_icontext(win_h, icon_h);
+    sprintf(text_pointer, "%d", number);
+
+    /* Now we need to inform the WIMP that the icon needs redrawing by setting
+       the icon flags - we don't actually change them with this call, but this
+       spurs the WIMP into action */
+
+    au_wordtobyte(win_h,  temp_buffer, 0);
+    au_wordtobyte(icon_h, temp_buffer, 4);
+    au_wordtobyte(0,      temp_buffer, 8);
+    au_wordtobyte(0,      temp_buffer, 12);
+
+    regs_in.r[1] = (int)temp_buffer;
+
+    _kernel_swi(Wimp_SetIconState, &regs_in, &regs_out);
+}
+
+char *au_get_ptr_to_icontext(unsigned long int winhdl, unsigned long int iconhdl){
+
+    /* This procedure interrogates an icon to determine the address where its
+       indirected text data is stored in memory, and returns it */
+
+    unsigned char temp_buffer[256];
+    _kernel_swi_regs regs_in, regs_out;
+    char *result;
+
+    au_wordtobyte(winhdl,  temp_buffer, 0);
+    au_wordtobyte(iconhdl, temp_buffer, 4);
+
+    regs_in.r[1] = (int)temp_buffer;
+    _kernel_swi(Wimp_GetIconState, &regs_in, &regs_out);
+
+    result = (char *)au_bytetoword(temp_buffer, 28);
+    return result;
+}
+
+void au_buildmenu(const char *title, menu_data *menu_dat) {
+
+    if (strlen(title) <= 11) {
+        /* Fill in the menu header with standard information */
+        strcpy(menu_dat->title, title);
+        menu_dat->colours       = MENU_TITLEFORE | MENU_TITLEBACK | MENU_WORKFORE | MENU_WORKBACK;
+        menu_dat->width         = MENU_WIDTH;
+        menu_dat->height        = MENU_HEIGHT;
+        menu_dat->vert_gap      = MENU_VERTGAP;
+        menu_dat->next_menuelem = NULL;
+        menu_dat->size          = sizeof(menu_data);
+    }
+}
+
+void au_addtomenu(const char *text, long int menu_flags, long int submenu, long int icon_flags, menu_data *menu_dat) {
+
+    menu_element *pointer;
+
+    if (strlen(text) <= 11) {
+        /* Work our way to end of menu list */
+        if (menu_dat->next_menuelem == NULL) {
+            menu_dat->next_menuelem = calloc(1, sizeof(menu_element));
+            menu_dat->size += sizeof(menu_element);
+            pointer = menu_dat->next_menuelem;
+        }
+        else {
+            pointer = menu_dat->next_menuelem;
+            while (pointer->next_menuelem != 0) {
+                pointer = pointer->next_menuelem;
+            }
+            pointer->next_menuelem = calloc(1, sizeof(menu_element));
+            menu_dat->size += sizeof(menu_element);
+            pointer = pointer->next_menuelem;
+        }
+        /* set up data */
+        strcpy(pointer->menu_text, text);
+        pointer->flags   = menu_flags;
+        pointer->submenu = submenu;
+        /* Apply standard icon flags */
+        icon_flags = icon_flags | MENUITEM_FORE | MENUITEM_BACK | ICON_ISTEXT | ICON_ISFILLED;
+        pointer->menu_iconflags = icon_flags;
+    }
+}
+
+void au_createmenu(menu_data *menu_dat) {
+
+    menu_element	*pointer;
+    int	i;
+
+    /* Assign memory */
+    menu_dat->datablock = calloc(1, menu_dat->size);
+    /* Begin copying data */
+    strcpy((char *)menu_dat->datablock, menu_dat->title);
+    au_wordtobyte(menu_dat->colours,  menu_dat->datablock, 12);
+    au_wordtobyte(menu_dat->width,    menu_dat->datablock, 16);
+    au_wordtobyte(menu_dat->height,   menu_dat->datablock, 20);
+    au_wordtobyte(menu_dat->vert_gap, menu_dat->datablock, 24);
+    /* end of header info */
+    i = 28;
+    pointer = menu_dat->next_menuelem;
+    while(pointer != NULL) {
+        au_wordtobyte(pointer->flags, menu_dat->datablock, i);
+        i += 4;
+        au_wordtobyte(pointer->submenu, menu_dat->datablock, i);
+        i += 4;
+        au_wordtobyte(pointer->menu_iconflags, menu_dat->datablock, i);
+        i += 4;
+        strcpy((char *) &menu_dat->datablock[i], pointer->menu_text);
+        i += 12;
+        pointer = pointer->next_menuelem;
+    }
+}
+
+void au_openmenu(menu_data *menu_dat, int mouse_x, int mouse_y) {
+
+    _kernel_swi_regs	regs_in, regs_out;
+
+    regs_in.r[1] = (int)menu_dat->datablock;
+    regs_in.r[2] = mouse_x;
+    regs_in.r[3] = mouse_y;
+    _kernel_swi(Wimp_CreateMenu, &regs_in, &regs_out);
+}
+
+void au_icon_get_text(char *dest_string, unsigned long int win_hdl, unsigned long int icon_hdl) {
+
+    char *text_pointer;
+
+    /* Assumes dest_string has enough space */
+    text_pointer = au_get_ptr_to_icontext(win_hdl, icon_hdl);
+    strcpy(dest_string, text_pointer);
+    return;
+}
+
+void au_destructmenuelem(menu_element *melem) {
+    if (melem != NULL) {
+        au_destructmenuelem(melem->next_menuelem);
+        free(melem);
+    }
+}
+
+void au_destructmenu(menu_data *mdata) {
+    if (mdata->datablock != NULL) {
+        free(mdata->datablock);
+    }
+    au_destructmenuelem(mdata->next_menuelem);
+}
+

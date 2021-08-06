@@ -1,0 +1,292 @@
+/*
+    add
+    T. D. West 15 to 17 October 1996
+    Adapted to fit directly into !Slate_FC application 18 January 1997
+*/
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "AUlib.h"
+#include "constant.h"
+
+#define SELF_SCORE -1
+
+#define FN_BACKUP  0
+#define FN_CURRENT 1
+#define FN_NEW     2
+
+#define FN_NAME    0
+#define FN_DATA    1
+#define FN_GOAL    2
+
+const char *infileerr = "Can't open file for input";
+const char *filenames[3][3] = {
+    {
+        "playbak",
+        "players",
+        "playnew"
+    },
+    {
+        "databak",
+        "data",
+        "datanew"
+    },
+    {
+        "goalbak",
+        "goalies",
+        "goalnew"
+    }
+};
+
+/*
+    the following struct is used to hold the data from the goalie data file
+*/
+typedef struct {
+    int   offset;
+    int   length;
+} goalie_data_type;
+
+FILE *fdata;
+FILE *fgoal;
+FILE *fname;
+char  name[PLAYER_NAME_SIZE];
+int   old_no_players;
+int   new_old_no_players;
+int   new_index;
+
+void report_single_ferr(FILE *file, const char *filtypstr) {
+    if (file != NULL) {
+        fclose(file);
+    }
+    else {
+        au_report_error(1, infileerr, WERRFLAG_OK_BOX, appname);
+    }
+}
+
+void report_file_error(void) {
+    report_single_ferr(fdata, filenames[FN_NAME][FN_CURRENT]);
+    report_single_ferr(fgoal, filenames[FN_DATA][FN_CURRENT]);
+    report_single_ferr(fname, filenames[FN_GOAL][FN_CURRENT]);
+}
+
+void dereturnstring(char *rawstring) {
+    char *cptr;
+    cptr = rawstring;
+    while (*cptr) {
+        if (*cptr == '\n') {
+            *cptr = '\0';
+        }
+        else {
+            cptr++;
+        }
+    }
+}
+
+char *find_surname(char *pname) {
+    char *snptr;
+    snptr = pname;
+    while (*snptr != ' ') {
+        snptr++;
+    }
+    while (*snptr == ' ') {
+        snptr++;
+    }
+    return snptr;
+}
+
+int compare_names(char *newname, char *oldname) {
+    int result;
+    char *oldsnptr;
+    char *newsnptr;
+    oldsnptr = find_surname(oldname);
+    newsnptr = find_surname(newname);
+    result = strcmp(newsnptr, oldsnptr);
+    if (result == 0) {
+        result = strcmp(newname, oldname);
+    }
+    return result;
+}
+
+int add_name_to_namefile(char *newname) {
+    int OK, i, cmpres, done;
+    char oldname[PLAYER_NAME_SIZE*2]; /* just in case */
+    OK = TRUE;
+    new_index = 0;
+    done = FALSE;
+    while ((new_index < old_no_players) && (!done)) {
+        fgets(oldname, PLAYER_NAME_SIZE*2, fname);
+        dereturnstring(oldname);
+        cmpres = compare_names(newname, oldname);
+        if (cmpres == 0) {
+            au_report_error(1, "Player already exists in database!", WERRFLAG_OK_BOX, appname);
+            OK = FALSE;
+            done = TRUE;
+        }
+        else {
+            if (cmpres < 0) {
+                done = TRUE;
+            }
+            else {
+                new_index++;
+            }
+        }
+    }
+    if (OK) {
+        FILE *fout;
+        rewind(fname);
+        fout = fopen(filenames[FN_NAME][FN_NEW], "w");
+        for (i = 0; i < old_no_players; i++) {
+            fgets(oldname, PLAYER_NAME_SIZE*2, fname);
+            if (i == new_index) {
+                fprintf(fout, "%s\n", newname);
+            }
+            fputs(oldname, fout);
+        }
+        if (i == new_index) {
+            fprintf(fout, "%s\n", newname);
+        }
+        fclose(fout);
+    }
+    return OK;
+}
+
+int update_datafile() {
+    int OK;
+    int i;
+    int *record;
+    int j;
+    FILE *fout;
+    OK = TRUE;
+    fout = fopen(filenames[FN_DATA][FN_NEW], "wb");
+    record = (int *)malloc(sizeof(int) * (old_no_players + 1));
+    fwrite(&new_old_no_players, sizeof(int), 1, fout);
+    for (i = 0; i < old_no_players; i++) {
+        if (i == new_index) {
+            /*
+                insert new player record
+            */
+            for (j = 0; j < new_old_no_players; j++) {
+                *(record + j) = 0;
+            }
+           *(record + new_index) = SELF_SCORE;
+            fwrite(record, sizeof(int), new_old_no_players, fout);
+        }
+        fread(record, sizeof(int), new_index, fdata);
+       *(record + new_index) = 0;
+        fread(record + new_index + 1, sizeof(int), old_no_players - new_index, fdata);
+        fwrite(record, sizeof(int), old_no_players + 1, fout);
+    }
+    if (i == new_index) {
+        /*
+            insert new player record
+        */
+        for (j = 0; j < new_old_no_players; j++) {
+            *(record + j) = 0;
+        }
+       *(record + new_index) = SELF_SCORE;
+        fwrite(record, sizeof(int), new_old_no_players, fout);
+    }
+    fclose(fout);
+    free(record);
+    return OK;
+}
+
+int update_goaliefile() {
+    int OK;
+    FILE *fout;
+    int offset;
+    int i;
+    char c;
+    goalie_data_type oldrec;
+    goalie_data_type newrec;
+    OK = TRUE;
+    fout = fopen(filenames[FN_GOAL][FN_NEW], "wb");
+    fwrite(&new_old_no_players, sizeof(int), 1, fout);
+    offset = sizeof(int) * (2 * old_no_players + 3);
+    for (i = 0; i < old_no_players; i++) {
+        fread(&oldrec, sizeof(goalie_data_type), 1, fgoal);
+        if (i == new_index) {
+            newrec.offset = offset;
+            newrec.length = 0;
+            fwrite(&newrec, sizeof(goalie_data_type), 1, fout);
+        }
+        oldrec.offset = offset;
+        fwrite(&oldrec, sizeof(goalie_data_type), 1, fout);
+        offset += oldrec.length;
+    }
+    if (i == new_index) {
+        newrec.offset = offset;
+        newrec.length = 0;
+        fwrite(&newrec, sizeof(goalie_data_type), 1, fout);
+    }
+    while (!feof(fgoal)) {
+        fread(&c, sizeof(char), 1, fgoal);
+        if (!feof(fgoal)) {
+            fwrite(&c, sizeof(char), 1, fout);
+        }
+    }
+    fclose(fout);
+    return OK;
+}
+
+void action_files(const char **fnamptr) {
+    remove(fnamptr[FN_BACKUP]);
+    rename(fnamptr[FN_CURRENT],   fnamptr[FN_BACKUP]);
+    rename(fnamptr[FN_NEW],       fnamptr[FN_CURRENT]);
+}
+
+int add_name(char *newname) { /* fname & sname were old parameters */
+    int  npg;
+    int  OK;
+    OK = FALSE;
+    fread(&old_no_players, sizeof(int), 1, fdata);
+    fread(&npg,        sizeof(int), 1, fgoal);
+    if (npg == old_no_players) {
+        if (add_name_to_namefile(newname)) {
+            if (update_datafile()) {
+                if (update_goaliefile()) {
+                    OK = TRUE;
+                }
+                else {
+                    printf("Failed to update goalie data file\n");
+                }
+            }
+            else {
+                printf("Failed to update data file\n");
+            }
+        }
+        else {
+            printf("Failed to add name to name file\n");
+        }
+    }
+    else {
+        au_report_error(1, "data and goalie files mismatch on old_no_players\n", WERRFLAG_OK_BOX, appname);
+    }
+    return OK;
+}
+
+int add_new_player(char *newname) {
+
+    int OK;
+
+    OK = FALSE;
+    fdata = fopen(filenames[FN_DATA][FN_CURRENT], "rb");
+    fgoal = fopen(filenames[FN_GOAL][FN_CURRENT], "rb");
+    fname = fopen(filenames[FN_NAME][FN_CURRENT], "r");
+    if ((fgoal != NULL) && (fdata != NULL) && (fname != NULL)) {
+        OK = add_name(newname);
+        fclose(fdata);
+        fclose(fgoal);
+        fclose(fname);
+        if (OK) {
+            action_files(filenames[FN_NAME]);
+            action_files(filenames[FN_DATA]);
+            action_files(filenames[FN_GOAL]);
+        }
+    }
+    else {
+        au_report_error(1, "Couldn't open one of the data files!", WERRFLAG_OK_BOX, appname);
+    }
+    return OK;
+}

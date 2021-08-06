@@ -1,0 +1,57 @@
+/*
+    apply
+
+    T. D. West 25 June - 26 July 1996
+    integrated from XAPPLY with !Slate_FC application
+    T. D. West 8 to 11 October 1996
+    T. D. West 16 to 19 January 1997
+    updated to use new scoring method
+*/
+#include <stdio.h>
+#include "constant.h"
+#include "data_io.h"
+#include "gapply.h"
+#include "types.h"
+
+void apply(selection_type *selection) {
+
+    if (score_data != NULL) {
+
+        int i, j, k, s, si, di, ki;
+        /*
+            for both sides
+        */
+        for (i = 0; i < 2; i++) {
+            /*
+                for each player in the side
+            */
+            for (j = 0; j < PLAYERS_PER_SIDE; j++) {
+                si = i * PLAYERS_PER_SIDE + j;  /* 0..4, 5..9 */
+                di = selection->team[si];       /* icon_no (0..no_players-1) */
+                /*
+                    increment the score for the players in each team (including self)
+                */
+                for (k = 0; k < PLAYERS_PER_SIDE; k++) {
+                    ki = selection->team[i * PLAYERS_PER_SIDE + k];
+                    s = get_score(di, ki);
+                    set_score(di, ki, s+1);
+                }
+                /*
+                    set the entry for self to SELF_SCORE
+                */
+                set_score(di, di, SELF_SCORE);
+                /*
+                    increment the number of games played
+                */
+                games_played[di]++;
+            }
+        }
+        /*
+            now output modified data back to data file
+        */
+        export_datafile();
+    }
+    if (goalie_data != NULL) {
+        goalie_apply(selection);
+    }
+}

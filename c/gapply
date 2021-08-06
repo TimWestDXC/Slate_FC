@@ -1,0 +1,74 @@
+/*
+    XGAPPLY
+
+    T. D. West 1-12 August 1996
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "constant.h"
+#include "data_io.h"
+#include "types.h"
+
+void goalie_apply(selection_type *in) {
+
+    int  len;
+    int  i, j, n;
+    int  index;
+    char done[5];
+    char *eptr;
+    char *dptr;
+    char *lptr;
+    goalie_data_type *grptr;
+
+    import_goaliefile();
+
+    /*
+        process data
+        for all players apply the new goalie data
+        and tidy up the data, shortening as required
+    */
+    for (i = 0; i < NO_PLAYERS; i++) {
+        /*
+            i       0 1 2 3 4  5 6 7 8 9
+            goalie  1 2 3 4 5  1 2 3 4 5
+        */
+        for (j = 0; j < 5; j++) {
+            done[j] = FALSE;
+        }
+        index = in->team[i];                        /* find correct record no */
+        grptr = goalie_data + index;                /* point grptr to correct goalie_data record */
+        len   = grptr->length;                      /* find length of goalie data for this player*/
+        lptr  = grptr->raw;                         /* point to raw goalie data */
+        eptr  = lptr + len;                         /* point to next free byte */
+       *eptr  = (char)((i % PLAYERS_PER_SIDE) + 1); /* store new goalie number */
+        dptr  = eptr;                               /* start ticking off goalie nos at end of data */
+        j = 0;                                      /* count when 5 different goalie nos found */
+        while ((j < 5) && (dptr > lptr)) {
+            n = *dptr - 1;                          /* get this goalie no */
+            if (!done[n]) {                         /* have we already seen this goalie no? */
+                done[n] = TRUE;                     /* no we haven't, tick it off */
+                j++;                                /* and increment count */
+            }
+            dptr--;                                 /* point to previous goalie no */
+        }
+        if (j == 5) {
+            dptr++;                                 /* found 5, point to first of 5 */
+        }
+        len = (int)(eptr - dptr + 1);               /* calc new data length */
+        grptr->length = len;                        /* store in record */
+        if (dptr > lptr) {                          /* do we need to shift data down? */
+            /*
+                yes, shift data down from dptr to lptr
+            */
+            eptr = lptr;
+            for (j = 0; j < len; j++) {
+                *eptr++ = *dptr++;
+            }
+        }
+    }
+    /*
+        now output modified data back to data file
+    */
+    export_goaliefile();
+}

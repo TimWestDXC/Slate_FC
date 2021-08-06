@@ -1,0 +1,21 @@
+/*
+    rules.h
+
+    T. D. West 2 November 1999
+
+*/
+#ifndef _RULES_
+#define _RULES_
+
+typedef struct rlist {
+    int           player_no[2];
+    struct rlist *next;
+} rlist_type;
+
+extern rlist_type *apart_list;
+extern rlist_type *together_list;
+
+extern void initialise_rule_list(rlist_type *list);
+extern void add_players_to_rule_list(rlist_type *list, int a, int b);
+
+#endif

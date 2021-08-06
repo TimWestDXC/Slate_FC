@@ -1,0 +1,13 @@
+/*
+    CREATE.H
+
+    T. D. West 25 - 28 June 1996
+    integrated with !Slate_FC application
+    T. D. West 7 October 1996
+*/
+#ifndef _CREATE_
+#define _CREATE_
+
+extern void create(void);
+
+#endif

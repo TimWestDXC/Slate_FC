@@ -1,0 +1,15 @@
+/*
+    apply.h
+
+    T. D. West 25 June - 26 July 1996
+    integrated from XAPPLY with !Slate_FC application
+    T. D. West 8 to 10 October 1996
+*/
+#ifndef _APPLY_
+#define _APPLY_
+
+#include "types.h"
+
+extern void apply(selection_type *selection);
+
+#endif

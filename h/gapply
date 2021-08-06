@@ -1,0 +1,13 @@
+/*
+    gapply.h
+
+    T. D. West 11 October 1996
+*/
+#ifndef _GAPPLY_
+#define _GAPPLY_
+
+#include "types.h"
+
+extern void goalie_apply(selection_type *in);
+
+#endif

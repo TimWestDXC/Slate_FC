@@ -1,0 +1,11 @@
+/*
+    add.h
+    T. D. West 15 to 17 October 1996
+    Adapted to fit directly into !Slate_FC application 18 January 1997
+*/
+#ifndef _ADD_
+#define _ADD_
+
+extern int add_new_player(char *newname);
+
+#endif

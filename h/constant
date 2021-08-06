@@ -1,0 +1,32 @@
+/*
+    CONSTANT.H
+
+    T. D. West 4 June to 7 October 1996
+    T. D. West 16 to 18 January 1997
+    Added externs to filename string constants
+*/
+#ifndef _CONSTANT_
+#define _CONSTANT_
+
+#define FALSE            0
+#define TRUE             !FALSE
+
+#define NO_PLAYERS       10
+#define PLAYERS_PER_SIDE (NO_PLAYERS/2)
+
+#define PLAYER_NAME_SIZE 12
+
+#define NO_SELECTIONS    10
+
+extern const char *appname;
+extern const char *player_filename;
+extern const char *date_filename;
+extern const char *data_filename;
+extern const char *databak_filename;
+extern const char *goalies_filename;
+extern const char *goalbak_filename;
+extern const char *played_filename;
+extern const char *playedbak_filename;
+extern const char *template_filename;
+
+#endif
