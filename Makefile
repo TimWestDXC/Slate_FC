@@ -12,12 +12,12 @@ AAsmflags = -depend !Depend -quit -CloseExec -To $@ -From
 
 
 # Final targets:
-@.!RunImage:   @.o.!RunImage @.o.AULib @.^.^.CLib.o.Stubs \
-        @.^.^.RISC_OSLib.o.RISC_OSLib @.o.Pick @.o.create @.o.data_io @.o.apply @.o.gpick @.o.gapply @.o.add \
-        @.o.rules 
-        Link $(Linkflags) @.o.!RunImage @.o.AULib @.^.^.CLib.o.Stubs \
-        @.^.^.RISC_OSLib.o.RISC_OSLib @.o.Pick @.o.create @.o.data_io @.o.apply @.o.gpick @.o.gapply @.o.add \
-        @.o.rules 
+@.!RunImage:   @.o.!RunImage @.o.AULib @.o.Pick @.o.create \
+        @.o.data_io @.o.apply @.o.gpick @.o.gapply @.o.add @.o.rules \
+        @.^.^.^.^.RISC_OSLib.o.RISC_OSLib @.^.^.^.^.CLib.o.Stubs 
+        Link $(Linkflags) @.o.!RunImage @.o.AULib @.o.Pick \
+        @.o.create @.o.data_io @.o.apply @.o.gpick @.o.gapply @.o.add @.o.rules \
+        @.^.^.^.^.RISC_OSLib.o.RISC_OSLib @.^.^.^.^.CLib.o.Stubs 
 
 
 # User-editable dependencies:
@@ -46,19 +46,20 @@ AAsmflags = -depend !Depend -quit -CloseExec -To $@ -From
 
 
 # Dynamic dependencies:
+o.AULib:	c.AULib
+o.AULib:	h.AUlib
+o.AULib:	C:h.swis
+o.AULib:	C:h.kernel
+o.rules:	c.rules
+o.rules:	h.rules
+o.add:	c.add
+o.add:	h.AUlib
+o.add:	C:h.swis
+o.add:	C:h.kernel
+o.add:	h.constant
 o.create:	c.create
 o.create:	h.constant
 o.create:	h.data_io
-o.data_io:	c.data_io
-o.data_io:	h.constant
-o.data_io:	h.data_io
-o.apply:	c.apply
-o.apply:	h.constant
-o.apply:	h.data_io
-o.apply:	h.gapply
-o.apply:	h.types
-o.apply:	h.constant
-o.apply:	h.types
 o.gpick:	c.gpick
 o.gpick:	h.constant
 o.gpick:	h.data_io
@@ -69,28 +70,6 @@ o.gapply:	h.constant
 o.gapply:	h.data_io
 o.gapply:	h.types
 o.gapply:	h.constant
-o.AULib:	c.AULib
-o.AULib:	h.AUlib
-o.AULib:	C:h.swis
-o.AULib:	C:h.kernel
-o.Pick:	c.Pick
-o.Pick:	h.constant
-o.Pick:	h.data_io
-o.Pick:	h.gpick
-o.Pick:	h.constant
-o.Pick:	h.types
-o.Pick:	h.constant
-o.Pick:	h.pick
-o.Pick:	h.types
-o.Pick:	h.rules
-o.Pick:	h.types
-o.add:	c.add
-o.add:	h.AUlib
-o.add:	C:h.swis
-o.add:	C:h.kernel
-o.add:	h.constant
-o.rules:	c.rules
-o.rules:	h.rules
 o.!RunImage:	c.!RunImage
 o.!RunImage:	h.add
 o.!RunImage:	h.apply
@@ -110,3 +89,24 @@ o.!RunImage:	h.types
 o.!RunImage:	h.pick
 o.!RunImage:	h.types
 o.!RunImage:	h.types
+o.apply:	c.apply
+o.apply:	h.constant
+o.apply:	h.data_io
+o.apply:	h.gapply
+o.apply:	h.types
+o.apply:	h.constant
+o.apply:	h.types
+o.Pick:	c.Pick
+o.Pick:	h.constant
+o.Pick:	h.data_io
+o.Pick:	h.gpick
+o.Pick:	h.constant
+o.Pick:	h.types
+o.Pick:	h.constant
+o.Pick:	h.pick
+o.Pick:	h.types
+o.Pick:	h.rules
+o.Pick:	h.types
+o.data_io:	c.data_io
+o.data_io:	h.constant
+o.data_io:	h.data_io

@@ -8,6 +8,7 @@
                                         and added Goalies button to put players in goalie order
                                         when teams have been entered manually
     17th September 1997                 Added save text option
+    25th January 2002                   Added undata (apart) filenames
 */
 
 /* #includes */
@@ -131,6 +132,8 @@ const char *player_filename    = "<Slate_FC$Dir>.data.players";
 const char *date_filename      = "<Slate_FC$Dir>.data.date";
 const char *data_filename      = "<Slate_FC$Dir>.data.data";
 const char *databak_filename   = "<Slate_FC$Dir>.data.databak";
+const char *undata_filename    = "<Slate_FC$Dir>.data.apart";
+const char *undatabak_filename = "<Slate_FC$Dir>.data.apartbak";
 const char *goalies_filename   = "<Slate_FC$Dir>.data.goalies";
 const char *goalbak_filename   = "<Slate_FC$Dir>.data.goalbak";
 const char *played_filename    = "<Slate_FC$Dir>.data.played";

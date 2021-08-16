@@ -6,6 +6,8 @@
     T. D. West 8 to 11 October 1996
     T. D. West 16 to 19 January 1997
     updated to use new scoring method
+    T. D. West 25 January 2002
+    updated to use together AND apart for scoring
 */
 #include <stdio.h>
 #include "constant.h"
@@ -40,6 +42,18 @@ void apply(selection_type *selection) {
                     set the entry for self to SELF_SCORE
                 */
                 set_score(di, di, SELF_SCORE);
+                /*
+                    increment the unscore for the players in each team (including self)
+                */
+                for (k = 0; k < PLAYERS_PER_SIDE; k++) {
+                    ki = selection->team[(1 - i) * PLAYERS_PER_SIDE + k];
+                    s = get_unscore(di, ki);
+                    set_unscore(di, ki, s+1);
+                }
+                /*
+                    set the entry for self to SELF_SCORE
+                */
+                set_unscore(di, di, SELF_SCORE);
                 /*
                     increment the number of games played
                 */

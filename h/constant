@@ -4,6 +4,8 @@
     T. D. West 4 June to 7 October 1996
     T. D. West 16 to 18 January 1997
     Added externs to filename string constants
+    T. D. West 25 January 2002
+    Added constants for undata files
 */
 #ifndef _CONSTANT_
 #define _CONSTANT_
@@ -23,6 +25,8 @@ extern const char *player_filename;
 extern const char *date_filename;
 extern const char *data_filename;
 extern const char *databak_filename;
+extern const char *undata_filename;
+extern const char *undatabak_filename;
 extern const char *goalies_filename;
 extern const char *goalbak_filename;
 extern const char *played_filename;

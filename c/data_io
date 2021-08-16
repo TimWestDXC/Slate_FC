@@ -1,9 +1,13 @@
 /*
-    DATA_IO
+   DATA_IO
 
-    T. D. West 9 to 11 October 1996
-    T. D. West 16 January 1997
-    updated to use new scoring method
+   T. D. West 9 to 11 October 1996
+   T. D. West 16 January 1997
+   updated to use new scoring method
+
+   T. D. West 25 January 2002
+   updated to use together AND apart for scoring
+
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +18,7 @@
 int no_players;
 int datasize;
 gen_rec_type     *score_data;              /* assigned by malloc() */
+gen_rec_type     *unscore_data;            /* assigned by malloc() */
 goalie_data_type *goalie_data;             /* assigned by malloc() */
 int              *games_played;            /* assigned by malloc() */
 
@@ -46,9 +51,38 @@ void set_score(int a, int b, int score) {
     *sptr = score;
 }
 
+gen_rec_type *grunoffset(int index) {
+    /*
+        calculate offset of player[index] score data
+    */
+    char *cptr = (char *)unscore_data;
+    cptr += (index * datasize);
+    return (gen_rec_type *)cptr;
+}
+
+int *unscore_ptr(int a, int b) {
+    int *sptr;
+    gen_rec_type *aptr;
+    aptr = grunoffset(a);
+    sptr = &aptr->score[b];
+    return sptr;
+}
+
+int get_unscore(int a, int b) {
+    int *sptr;
+    sptr = unscore_ptr(a, b);
+    return *sptr;
+}
+
+void set_unscore(int a, int b, int score) {
+    int *sptr;
+    sptr = unscore_ptr(a, b);
+    *sptr = score;
+}
+
 void import_datafile(void) {
     /*
-        This function opens the data file,
+        This function opens the data files,
         reads the data into memory
         and returns the address of the data
         It also sets the exported variables no_players and datasize
@@ -63,7 +97,12 @@ void import_datafile(void) {
         Open the data file
     */
     score_data = NULL;
+    unscore_data = NULL;
+    games_played = NULL;
     no_players = 0;
+    /*
+        Try to open the score data file
+    */
     if ((fdata = fopen(data_filename, "rb")) != NULL) {
         /*
             The data file is open
@@ -86,13 +125,41 @@ void import_datafile(void) {
             fread(score_data, datasize, no_players, fdata);
         }
         /*
-            Now close the data file
+            Now close the score data file
         */
         fclose(fdata);
         /*
+            Try to open the unscore data file
+        */
+        if ((fdata = fopen(undata_filename, "rb")) != NULL) {
+            /*
+                The data file is open
+                Read the number of players from the file into no_players
+            */
+            fread(&no_players, sizeof(int), 1, fdata);
+            /*
+                Now calculate the size of data per player record
+            */
+            datasize = sizeof(int) * no_players;
+            /*
+                Now allocate enough memory for the data for all players
+            */
+            unscore_data = (gen_rec_type *)malloc(datasize * no_players);
+            if (unscore_data != NULL) {
+                /*
+                    We have allocated memory
+                    so read the data from the file into memory
+                */
+                fread(unscore_data, datasize, no_players, fdata);
+            }
+            /*
+                Now close the unscore data file
+            */
+            fclose(fdata);
+        }
+        /*
             Open the games played data file
         */
-        games_played = NULL;
         if ((fdata = fopen(played_filename, "rb")) != NULL) {
             /*
                 The data file is open
@@ -127,6 +194,20 @@ void export_datafile(void) {
         if (fdata != NULL) {
             fwrite(&no_players, sizeof(int), 1,          fdata);
             fwrite(score_data,  datasize,    no_players, fdata);
+        }
+        fclose(fdata);
+    }
+    if (unscore_data != NULL) {
+        FILE *fdata;
+        /*
+            Output data to data file
+        */
+        remove(undatabak_filename);
+        rename(undata_filename, undatabak_filename);
+        fdata = fopen(undata_filename, "wb");
+        if (fdata != NULL) {
+            fwrite(&no_players,  sizeof(int), 1,          fdata);
+            fwrite(unscore_data, datasize,    no_players, fdata);
         }
         fclose(fdata);
     }

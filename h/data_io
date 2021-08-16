@@ -4,6 +4,10 @@
     T. D. West 9 to 11 October 1996
     T. D. West 16 January 1997
     Added games_played
+
+   T. D. West 25 January 2002
+   updated to use together AND apart for scoring
+
 */
 #ifndef _DATA_IO_
 #define _DATA_IO_
@@ -34,6 +38,10 @@ extern gen_rec_type *groffset(int index);
 extern int *score_ptr(int a, int b);
 extern int get_score(int a, int b);
 extern void set_score(int a, int b, int score);
+extern gen_rec_type *grunoffset(int index);
+extern int *unscore_ptr(int a, int b);
+extern int get_unscore(int a, int b);
+extern void set_unscore(int a, int b, int score);
 extern void import_datafile(void);
 extern void export_datafile(void);
 extern void import_goaliefile(void);

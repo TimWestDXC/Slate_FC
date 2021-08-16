@@ -1,22 +1,25 @@
 /*
- Title:   PICK
+   Title:   PICK
 
- Purpose: A program to generate 5-a-side teams
-          with players who have not played together most
+   Purpose: A program to generate 5-a-side teams
+            with players who have not played together most
 
- T. D. West, 27 June to 26 July 1996
- integrated with the !Slate_FC application 30 September to 10 October 1996
+   T. D. West, 27 June to 26 July 1996
+   integrated with the !Slate_FC application 30 September to 10 October 1996
 
- T. D. West, 16 to 19 January 1997
- Changed final score to be product of team scores instead of sum
- and changed to new scoring method
+   T. D. West, 16 to 19 January 1997
+   Changed final score to be product of team scores instead of sum
+   and changed to new scoring method
 
- T. D. West, 2 November 1999
- Added rules for team selection
+   T. D. West, 2 November 1999
+   Added rules for team selection
 
- To do:
-  handle new player in list of 10 players
-  allow 4-a-side games
+   T. D. West 25 January 2002
+   updated to use together AND apart for scoring
+
+   To do:
+    handle new player in list of 10 players
+    allow 4-a-side games
 
 */
 
@@ -126,6 +129,8 @@ int get_teamscore(selection_type *in, int team) {
     int mate;
     int mate_no;
     int mate_score;
+    int apart_score;
+    int pair_score;
     int mate_index;
 
     teamscore = 0;
@@ -143,18 +148,41 @@ int get_teamscore(selection_type *in, int team) {
             mate_no = picked.team[team].player[mate].number;
             mate_index = in->team[mate_no];
             if (played == 0) {
-                mate_score = 0;
+                /*
+                    if this player has not played any games
+                    all the scores must be 0
+                */
+                pair_score = 0;
             }
             else {
+                /*
+                    work out the score for each other player
+                */
                 mate_score = get_score(index, mate_index);
                 if (mate_score != SELF_SCORE) {
-                    mate_score = played - mate_score;
-                    mate_score *= 100;
-                    mate_score /= played;
-                    teamscore += mate_score;
+                    /*
+                        calculate the percentage for games apart
+                    */
+                    apart_score = get_unscore(index, mate_index);
+                    if ((mate_score + apart_score) == 0) {
+                        pair_score = 0;
+                    }
+                    else {
+                        pair_score = apart_score * 100 / (mate_score + apart_score);
+                    }
+                }
+                else {
+                    /*
+                        The score for self must be 0
+                    */
+                    pair_score = 0;
                 }
             }
-            picked.team[team].player[player].mate_score[mate] = mate_score;
+            /*
+                add the pair score to the team score
+            */
+            teamscore += pair_score;
+            picked.team[team].player[player].mate_score[mate] = pair_score;
         }
     }
     return teamscore/2;

@@ -1,6 +1,7 @@
 |WimpSlot -min 128k -max 128k
 WimpSlot -min 512k -max 512k
 Set Slate_FC$Dir <Obey$Dir>
+Iconsprites <Obey$Dir>.!Sprites
 Filer_OpenDir <Obey$Dir>.data
 Run <Slate_FC$Dir>.!RunImage
 Filer_CloseDir <Obey$Dir>.data
