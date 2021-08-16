@@ -46,17 +46,8 @@ AAsmflags = -depend !Depend -quit -CloseExec -To $@ -From
 
 
 # Dynamic dependencies:
-o.AULib:	c.AULib
-o.AULib:	h.AUlib
-o.AULib:	C:h.swis
-o.AULib:	C:h.kernel
 o.rules:	c.rules
 o.rules:	h.rules
-o.add:	c.add
-o.add:	h.AUlib
-o.add:	C:h.swis
-o.add:	C:h.kernel
-o.add:	h.constant
 o.create:	c.create
 o.create:	h.constant
 o.create:	h.data_io
@@ -91,6 +82,15 @@ o.Pick:	h.types
 o.data_io:	c.data_io
 o.data_io:	h.constant
 o.data_io:	h.data_io
+o.AULib:	c.AULib
+o.AULib:	h.AUlib
+o.AULib:	C:h.swis
+o.AULib:	C:h.kernel
+o.add:	c.add
+o.add:	h.AUlib
+o.add:	C:h.swis
+o.add:	C:h.kernel
+o.add:	h.constant
 o.!RunImage:	c.!RunImage
 o.!RunImage:	h.add
 o.!RunImage:	h.apply

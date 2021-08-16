@@ -7,6 +7,24 @@
 
 #define ICON_SHADE (1u<<22)
 
+long int au_get_iconflags(unsigned long int winhdl, unsigned long int iconhdl){
+
+    /* This procedure reads an icon's flags, and returns them */
+
+    unsigned char temp_buffer[256];
+    _kernel_swi_regs regs_in, regs_out;
+    long int result;
+
+    au_wordtobyte(winhdl,  temp_buffer, 0);
+    au_wordtobyte(iconhdl, temp_buffer, 4);
+
+    regs_in.r[1] = (int)temp_buffer;
+    _kernel_swi(Wimp_GetIconState, &regs_in, &regs_out);
+
+    result = *(long int *)(temp_buffer + 24);
+    return result;
+}
+
 void au_invert_icon_state(unsigned long int win_h, unsigned long int icon_h) {
 
     _kernel_swi_regs regs_in, regs_out;

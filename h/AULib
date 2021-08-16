@@ -226,6 +226,7 @@ typedef struct menu_data {
 } menu_data;
 
 /* Prototyping */
+extern long int          au_get_iconflags(unsigned long int winhdl, unsigned long int iconhdl);
 extern void              au_invert_icon_state(unsigned long int win_h, unsigned long int icon_h);
 extern void              au_enable_icon(unsigned long int win_h, unsigned long int icon_h);
 extern void              au_disable_icon(unsigned long int win_h, unsigned long int icon_h);
