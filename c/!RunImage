@@ -9,6 +9,7 @@
                                         when teams have been entered manually
     17th September 1997                 Added save text option
     25th January 2002                   Added undata (apart) filenames
+    22nd February 2002                  Update save text to save all 10 selections
 */
 
 /* #includes */
@@ -153,6 +154,14 @@ char *pick_edit[] = {
     "EDIT"
 };
 
+/*
+    This is the text for the SAVE ALL/SAVE TEXT button
+*/
+char *text_all[] = {
+    "Save Text",
+    "Save All"
+};
+
 char *month[12] = {
     "January",
     "February",
@@ -225,6 +234,7 @@ void update_team_icons(void);
 void load_date(int *day, int *month, int *year);
 void save_date(int *day, int *month, int *year);
 void save_text(void);
+void save_all(void);
 
 /* Main program */
 
@@ -719,7 +729,12 @@ void handle_click_on_picked_window_icon(int icon_num, int button) {
                         }
                         break;
                     case SAVE_TEXT_BUTTON:
-                        save_text();
+                        if (current_mode == MANUAL_MODE) {
+                           save_text();
+                        }
+                        else {
+                           save_all();
+                        }
                         break;
                     default:
                         break;
@@ -1023,6 +1038,7 @@ void set_manual_mode(void) {
     current_mode = MANUAL_MODE;
     selnptr = &manual;
     au_icon_text_change(pick_edit[current_mode], win_data[PICKED_WINDOW].win_handle, PICK_BUTTON);
+    au_icon_text_change(text_all[current_mode], win_data[PICKED_WINDOW].win_handle, SAVE_TEXT_BUTTON);
     update_selection_icon();
     update_team_icons();
 }
@@ -1034,6 +1050,7 @@ void set_computed_mode(void) {
     current_selection = 0;
     selnptr = computed;
     au_icon_text_change(pick_edit[current_mode], win_data[PICKED_WINDOW].win_handle, PICK_BUTTON);
+    au_icon_text_change(text_all[current_mode], win_data[PICKED_WINDOW].win_handle, SAVE_TEXT_BUTTON);
     update_selection_icon();
     update_team_icons();
 }
@@ -1111,4 +1128,126 @@ void save_text(void) {
         gicon++;
     }
     fclose(savefile);
+}
+
+int index_for_icon(int *list, int icon_no) {
+
+    int j;
+    int retval = -1;
+
+    for (j = 0; j < NO_PLAYERS; j++) {
+        if (list[j] == icon_no) {
+           retval = j;
+           break;
+        }
+    }
+    return retval;
+}
+
+void save_all(void) {
+
+    FILE *savefile = fopen(savetext_filename, "w");
+    selection_type *selptr = computed;
+    char pname[PLAYER_NAME_SIZE];
+    char *cptr;
+    int count[NO_PLAYERS][NO_PLAYERS];
+    int player_icon_list[NO_PLAYERS];
+    int a,b,i,j,k,m,n;
+    char pinits[NO_PLAYERS][2];
+
+    /*
+        Clear the count array
+    */
+    for (i = 0; i < NO_PLAYERS; i++) {
+        for (j = 0; j < NO_PLAYERS; j++) {
+            count[i][j] = 0;
+        }
+    }
+
+    /*
+        Populate the player icon list
+    */
+    for (j = 0; j < NO_PLAYERS; j++) {
+        player_icon_list[j] = selptr->team[j];
+        /* fprintf(savefile, "%4d", player_icon_list[j]); */
+    }
+    /* fprintf(savefile, "\n"); */
+
+    /*
+        Scan the computed selections
+    */
+    /* for each selection */
+    for (i = 0; i < NO_SELECTIONS; i++) {
+        /* for each team */
+        n = 0;
+        for (j = 0; j < 2; j++) {
+            /* for each player in the team */
+            for (k = 0; k < PLAYERS_PER_SIDE; k++) {
+                /* compare with all other players on the team */
+                for (m = k + 1; m < PLAYERS_PER_SIDE; m++) {
+                    /* don't count for self */
+                    if (k != m) {
+                       a = index_for_icon(player_icon_list, selptr->team[n+k]);
+                       if (a == -1) {
+                          fprintf(savefile, "a=-1, %2d %2d %2d %2d\n", i, j, k, m);
+                       }
+                       b = index_for_icon(player_icon_list, selptr->team[n+m]);
+                       if (b == -1) {
+                          fprintf(savefile, "b=-1, %2d %2d %2d %2d\n", i, j, k, m);
+                       }
+                       count[a][b]++;
+                       count[b][a]++;
+                    }
+                }
+            }
+            n += PLAYERS_PER_SIDE;
+        }
+        selptr++;
+    }
+
+    /*
+        Output the results to file
+        First collect the players initials
+    */
+    for (i = 0; i < NO_PLAYERS; i++) {
+        cptr = player[player_icon_list[i]].name;
+        /* fprintf(savefile, "%s", cptr); */
+        pinits[i][0] = *cptr;
+        while (*cptr++ != ' ');
+        pinits[i][1] = *cptr;
+    }
+    /*
+        Output the initials in two rows
+    */
+    for (j = 0; j < 2; j++) {
+        fprintf(savefile, "                ");
+        for (i = 0; i < NO_PLAYERS; i++) {
+            fprintf(savefile, "%4c", pinits[i][j]);
+        }
+        fprintf(savefile, "\n");
+    }
+    /*
+        Output the count data
+    */
+    for (i = 0; i < NO_PLAYERS; i++) {
+        /*
+            Output the player name, stripping off any line feed
+        */
+        strncpy(pname, player[player_icon_list[i]].name, PLAYER_NAME_SIZE);
+        if ((cptr = strchr(pname, LF)) != NULL) {
+            *cptr = '\0';
+        }
+        fprintf(savefile, "%-16s", pname);
+        /*
+            Output the actual count data
+        */
+        for (j = 0; j < NO_PLAYERS; j++) {
+            fprintf(savefile, "%4d", count[i][j]);
+        }
+        fprintf(savefile, "\n");
+        selptr++;
+    }
+
+    fclose(savefile);
+
 }
